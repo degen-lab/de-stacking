@@ -11,7 +11,7 @@
 ;;
 (define-constant err-only-liquidity-provider (err u100))
 (define-constant err-insufficient-funds (err u200))
-(define-constant first-deposit u100)
+(define-constant first-deposit u0)
 
 ;; data vars
 ;;
@@ -24,7 +24,10 @@
 
 ;; data maps
 ;;
+;; ;; define map user-data[principal] -> until block ht, delegated-balance, locked-balance 
 (define-map map-delegated-balance principal uint)
+
+;; ;; define pox address (btc)
 
 ;; public functions
 ;;
@@ -50,7 +53,12 @@
   (var-set sc-locked-balance (+ (var-get sc-locked-balance) amount))
   (ok true)))
 
-;; (define-public (delegate-stx) body)
+;; (define-public (delegate-stx (amount-ustx uint) 
+;;                              (delegate-to principal) 
+;;                              (until-burn-ht (optional uint))
+;;                              (pox-addr (optional { version: (buff 1),
+;;                                                    hashbytes: (buff 32) })))
+;; (contract-call? .pox-2-fake delegate-stx amount-ustx (var-get liquidity-provider) until-burn-ht pox-addr))
 
 ;; read only functions
 ;;
