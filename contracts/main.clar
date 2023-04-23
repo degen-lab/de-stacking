@@ -58,6 +58,7 @@
   { until-burn-ht: (optional uint)})
 
 (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-block-ht:u0 })
+(allow-contract-caller (as-contract tx-sender) none)
 ;; public functions
 ;;
 (define-public (deposit-stx-SC-owner (amount uint)) 
@@ -74,7 +75,7 @@
   (try! (allow-contract-caller (as-contract tx-sender) none))
   (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
   (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
-  (ok true)))
+  (ok (as-contract (contract-call? .pox-2-fake allow-contract-caller (as-contract tx-sender) none)))))
 
 (define-public (lock-funds-future-rewards (amount uint)) 
 (begin 
