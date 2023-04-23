@@ -17,10 +17,15 @@
 (define-constant REWARD_CYCLE_LENGTH u2100)
 
 (define-constant err-only-liquidity-provider (err u100))
+(define-constant err-already-in-pool (err u101))
 (define-constant err-insufficient-funds (err u200))
+(define-constant err-full-stacking-pool (err u300))
 (define-constant err-decrease-forbidden (err u503))
+(define-constant err-stacking-permission-denied (err u609))
 
 (define-constant first-deposit u0)
+(define-constant list-max-len u300)
+
 
 ;; data vars
 ;;
@@ -28,7 +33,7 @@
 (define-data-var sc-delegated-balance uint u0)
 (define-data-var sc-owned-balance uint u0)
 (define-data-var sc-locked-balance uint u0)
-(define-data-var stackers-list (list 100 principal) (list tx-sender))
+(define-data-var stackers-list (list 300 principal) (list tx-sender))
 (define-data-var liquidity-provider principal tx-sender)
 
 (define-data-var pool-pox-address {hashbytes: (buff 32), version: (buff 1)}
@@ -41,27 +46,34 @@
 ;; data maps
 ;;
 
-(define-map user-data { address: principal } { delegated-balance: uint, locked-balance:uint, until-block-ht:uint })
+(define-map user-data { address: principal } {is-in-pool:bool, delegated-balance: uint, locked-balance:uint, until-block-ht:uint })
 ;; (define-map map-delegated-balance principal uint)
 
 (define-map pox-addr-indices uint uint)
 
 (define-map last-aggregation uint uint)
 
+(define-map allowance-contract-callers
+  { sender: principal, contract-caller: principal}
+  { until-burn-ht: (optional uint)})
+
+(map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-block-ht:u0 })
 ;; public functions
 ;;
-(define-public (ask-to-join-pool (stacker principal))
-(begin 
-  (concat (var-get stackers-list) (list stacker ))
-  (map-set user-data {address: stacker} {delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
-  (ok true)))
-
 (define-public (deposit-stx-SC-owner (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
   (try! (as-contract (stx-transfer? amount tx-sender (var-get liquidity-provider))))
   (var-set sc-total-balance (+ amount (var-get sc-total-balance)))
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
+  (ok true)))
+
+(define-public (join-stacking-pool)
+(begin
+  (asserts! (is-none (map-get? user-data {address: tx-sender})) err-already-in-pool)
+  (try! (allow-contract-caller (as-contract tx-sender) none))
+  (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
+  (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
   (ok true)))
 
 (define-public (lock-funds-future-rewards (amount uint)) 
@@ -72,28 +84,53 @@
   (var-set sc-locked-balance (+ (var-get sc-locked-balance) amount))
   (ok true)))
 
-;; (define-public (delegate-stx (amount-ustx uint))
-;;   (let ((user tx-sender)
-;;         (current-cycle (contract-call? 'SP000000000000000000002Q6VF78.pox-2 current-pox-reward-cycle)))
-;;     (asserts! (check-caller-allowed) err-stacking-permission-denied)
-;;     ;; Do 1. and 2.
-;;     (try! (delegate-stx-inner amount-ustx (as-contract tx-sender) none))
-;;     ;; Do 3.
-;;     (try! (as-contract (lock-delegated-stx user)))
-;;     ;; Do 4.
-;;     (ok (maybe-stack-aggregation-commit current-cycle))))
+(define-public (allow-contract-caller (caller principal) (until-burn-ht (optional uint)))
+  (begin
+    (asserts! (is-eq tx-sender contract-caller) err-stacking-permission-denied)
+    (ok (map-set allowance-contract-callers
+          { sender: tx-sender, contract-caller: caller}
+          { until-burn-ht: until-burn-ht}))))
 
-;; (define-public (delegate-stx (amount-ustx uint) 
-;;                              (delegate-to principal) 
-;;                              (until-burn-ht (optional uint))
-;;                              (pox-addr (optional { version: (buff 1),
-;;                                                    hashbytes: (buff 32) })))
-;; (contract-call? .pox-2-fake delegate-stx amount-ustx (var-get liquidity-provider) until-burn-ht pox-addr))
+;; Revoke contract-caller authorization to call stacking methods
+(define-public (disallow-contract-caller (caller principal))
+  (begin
+    (asserts! (is-eq tx-sender contract-caller) err-stacking-permission-denied)
+    (ok (map-delete allowance-contract-callers { sender: tx-sender, contract-caller: caller}))))
 
-(define-public (print-stx-account)
-  (ok (print (stx-account tx-sender))))
+
+(define-public (delegate-stx (amount-ustx uint))
+  (let ((user tx-sender)
+        (current-cycle (contract-call? 'SP000000000000000000002Q6VF78.pox-2 current-pox-reward-cycle)))
+    (asserts! (check-caller-allowed) err-stacking-permission-denied)
+    ;; Do 1. and 2.
+    (try! (delegate-stx-inner amount-ustx (as-contract tx-sender) none))
+    ;; Do 3.
+    (try! (as-contract (lock-delegated-stx user)))
+    ;; Do 4.
+    (ok (maybe-stack-aggregation-commit current-cycle))))
+
 ;; read only functions
 ;;
+(define-read-only (print-stx-account)
+(stx-account tx-sender))
+
+(define-read-only (get-pool-members) 
+(var-get stackers-list))
+
+(define-read-only (check-caller-allowed)
+  (or (is-eq tx-sender contract-caller)
+    (let ((caller-allowed
+            ;; if not in the caller map, return false
+            (unwrap! 
+              (map-get? allowance-contract-callers
+                { sender: tx-sender, contract-caller: contract-caller})
+            false))
+          (expires-at
+            ;; if until-burn-ht not set, then return true (because no expiry)
+            (unwrap! (get until-burn-ht caller-allowed) true)))
+      ;; is the caller allowance still valid
+      (< burn-block-height expires-at))))
+
 (define-read-only (get-SC-total-balance) 
 (var-get sc-total-balance))
 
