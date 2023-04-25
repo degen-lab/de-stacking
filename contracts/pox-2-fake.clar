@@ -273,8 +273,8 @@
                                     { sender: tx-sender, contract-caller: contract-caller })
                           false))
                (expires-at
-                 ;; if until-burn-ht not set, then return true (because no expiry)
-                 (unwrap! (get until-burn-ht caller-allowed) true)))
+                ;; if until-burn-ht not set, then return true (because no expiry)
+                (unwrap! (get until-burn-ht caller-allowed) true)))
           ;; is the caller allowance expired?
           (if (>= burn-block-height expires-at)
               false
