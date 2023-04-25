@@ -29,13 +29,8 @@
 
 (define-constant first-deposit u0)
 (define-constant list-max-len u300)
-<<<<<<< Updated upstream
-
-
-=======
 (define-constant pool-contract (as-contract tx-sender))
 (define-constant pox-2-contract (as-contract .pox-2-fake))
->>>>>>> Stashed changes
 ;; data vars
 ;;
 (define-data-var sc-total-balance uint u0)
@@ -86,11 +81,7 @@
   (try! (allow-contract-caller (as-contract tx-sender) none))
   (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
   (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
-<<<<<<< Updated upstream
-  (ok (as-contract (contract-call? .pox-2-fake allow-contract-caller (as-contract tx-sender) none)))))
-=======
   (ok true)))
->>>>>>> Stashed changes
 
 (define-public (quit-stacking-pool)
 (begin
@@ -129,12 +120,8 @@
 
 (define-public (delegate-stx (amount-ustx uint))
   (let ((user tx-sender)
-<<<<<<< Updated upstream
-        (current-cycle (contract-call? 'SP000000000000000000002Q6VF78.pox-2 current-pox-reward-cycle)))
-=======
         (current-cycle (contract-call? .pox-2-fake current-pox-reward-cycle)))
         (print (contract-call? .pox-2-fake current-pox-reward-cycle)) ;; u0
->>>>>>> Stashed changes
     (asserts! (check-caller-allowed) err-stacking-permission-denied)
     (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
     
@@ -223,13 +210,8 @@
 
 (define-private (delegate-stx-inner (amount-ustx uint) (delegate-to principal) (until-burn-ht (optional uint)))
   (let ((result-revoke
-<<<<<<< Updated upstream
-            ;; Calls revoke and ignores result
-          (contract-call? 'SP000000000000000000002Q6VF78.pox-2 revoke-delegate-stx)))
-=======
           ;; Calls revoke and ignores result
           (contract-call? .pox-2-fake revoke-delegate-stx)))
->>>>>>> Stashed changes
     ;; Calls delegate-stx, converts any error to uint
     (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
       success (ok success)
