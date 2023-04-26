@@ -273,16 +273,67 @@
     (asserts! (>= amount-ustx (get locked status)) err-decrease-forbidden)
     (match (contract-call? .pox-2-fake delegate-stack-extend
             user pox-address u1)
-      success (if (> amount-ustx (get locked status))
-                (match (contract-call? .pox-2-fake delegate-stack-increase
-                         user pox-address (- amount-ustx (get locked status)))
-                  success-increase (ok {lock-amount: (get total-locked success-increase),
+      success (begin 
+              (map-set user-data 
+                      {address: user} 
+                      {
+                      is-in-pool: 
+                      (if 
+                        (is-some 
+                          (get is-in-pool (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
+                        false),
+                      delegated-balance: 
+                      (if   
+                        (is-some 
+                          (get delegated-balance (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
+                        u0), 
+                      locked-balance: 
+                      (if 
+                        (is-some 
+                          (get locked-balance (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get locked-balance (map-get? user-data {address: user})))
+                        u0),
+                      until-block-ht: 
+                      (if 
+                        (is-some (get until-block-ht (map-get? user-data {address: user})))
+                        (+ (unwrap-panic (get until-block-ht (map-get? user-data {address: user}))) REWARD_CYCLE_LENGTH)
+                        REWARD_CYCLE_LENGTH)})
+                        (print (get-user-data user))
+              (if (> amount-ustx (get locked status))          
+                (match (contract-call? .pox-2-fake delegate-stack-increase user pox-address (- amount-ustx (get locked status))) ;; to replace with local locked
+                  success-increase (begin
+                                    (map-set user-data 
+                                      {address: user} 
+                                      {
+                                      is-in-pool: 
+                                        (if 
+                                          (is-some 
+                                            (get is-in-pool (map-get? user-data {address: user}))) 
+                                          (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
+                                          false),
+                                      delegated-balance: 
+                                        (if   
+                                          (is-some 
+                                            (get delegated-balance (map-get? user-data {address: user}))) 
+                                          (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
+                                          u0), 
+                                      locked-balance: amount-ustx,
+                                      until-block-ht: 
+                                        (if 
+                                          (is-some (get until-block-ht (map-get? user-data {address: user})))
+                                          (unwrap-panic (get until-block-ht (map-get? user-data {address: user})))
+                                          u0)})
+                                    (ok {lock-amount: (get total-locked success-increase),
                                         stacker: user,
-                                        unlock-burn-height: (get unlock-burn-height success)})
+                                        unlock-burn-height: (get unlock-burn-height success)}))
                   error-increase (err (* u1000000000 (to-uint error-increase))))
-                (ok {lock-amount: (get locked status),
-                     stacker: user,
-                     unlock-burn-height: (get unlock-burn-height success)}))
+                (ok {
+                      lock-amount: (get locked status),
+                      stacker: user,
+                      unlock-burn-height: (get unlock-burn-height success)})))
+                      
       error (err (* u1000000 (to-uint error))))))
 
 (define-read-only (get-delegated-amount (user principal))
