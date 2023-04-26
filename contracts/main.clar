@@ -91,9 +91,6 @@
   (map-delete user-data {address: tx-sender})
   (ok true)))
 
-(define-public (filter-check) 
-(ok (filter remove-stacker-stackers-list (var-get stackers-list))))
-
 (define-private (remove-stacker-stackers-list (address principal)) (not (is-eq tx-sender address)))
 
 (define-public (lock-funds-future-rewards (amount uint)) 
@@ -214,7 +211,16 @@
           (contract-call? .pox-2-fake revoke-delegate-stx)))
     ;; Calls delegate-stx, converts any error to uint
     (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
-      success (ok success)
+      success (begin 
+                (map-set 
+                  user-data 
+                    {address: tx-sender} 
+                    {
+                      is-in-pool: true,
+                      delegated-balance: (+ (default-to u0 (get delegated-balance (map-get? user-data {address:tx-sender}))) amount-ustx),
+                      locked-balance: (default-to u0 (get delegated-balance (map-get? user-data {address:tx-sender}))),
+                      until-block-ht: (default-to u0 until-burn-ht)})
+                (ok success))
       error (err (* u1000 (to-uint error))))))
 
 (define-private (lock-delegated-stx (user principal))
