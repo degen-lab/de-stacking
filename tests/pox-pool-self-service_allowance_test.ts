@@ -1,0 +1,169 @@
+import { allowContractCaller } from "./client/pox-2-client.ts";
+import {
+  delegateStx,
+  fpDelegationAllowContractCaller,
+  joinStackingPool,
+} from "./client/main-client.ts";
+import { Clarinet, Chain, Account, Tx, types } from "./deps.ts";
+import {
+  Errors,
+  PoxErrors,
+  poxAddrFP,
+  poxAddrPool1,
+  poxAddrPool2,
+} from "./constants.ts";
+
+import {
+  expectPartialStackedByCycle,
+  expectTotalStackedByCycle,
+} from "./utils.ts";
+
+Clarinet.test({
+  name: "Ensure that user can't delegate without allowance",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const wallet_1 = accounts.get("wallet_1")!;
+
+    // try without any allowance
+    let block = chain.mineBlock([delegateStx(20_000_000_000_000, wallet_1)]);
+
+    // check delegation calls
+    block.receipts[0].result.expectErr().expectUint(Errors.AllowPoolInPox2);
+  },
+});
+
+Clarinet.test({
+  name: "Ensure that user can only delegate from a contract allowing pox-2 and joining the pool",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const mainDelegateStx = (amountUstx: number, user: Account) => {
+      return Tx.contractCall(
+        "main",
+        "delegate-stx",
+        [types.uint(amountUstx)],
+        user.address
+      );
+    };
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+    const wallet_2 = accounts.get("wallet_2")!;
+    const mainContract = deployer.address + ".main";
+
+    // try without any allowance
+    let block = chain.mineBlock([mainDelegateStx(20_000_000_000, wallet_1)]);
+    block.receipts[0].result.expectErr().expectUint(Errors.AllowPoolInPox2);
+
+    // try with pox allowance only
+    block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_1),
+      mainDelegateStx(20_000_000_000_000, wallet_1),
+    ]);
+
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectErr().expectUint(Errors.NotInPool);
+
+    // delegate-stx with pox-2 allowance and joining the pool
+    block = chain.mineBlock([
+      joinStackingPool(wallet_1),
+      mainDelegateStx(20_000_000_000_000, wallet_1),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+    expectTotalStackedByCycle(1, 0, 20_000_000_000_000, chain, deployer);
+  },
+});
+
+Clarinet.test({
+  name: "Ensure that user can delegate how much he wants, but can lock only funds he owns",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const mainDelegateStx = (amountUstx: number, user: Account) => {
+      return Tx.contractCall(
+        "main",
+        "delegate-stx",
+        [types.uint(amountUstx)],
+        user.address
+      );
+    };
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+    const wallet_2 = accounts.get("wallet_2")!;
+    const mainContract = deployer.address + ".main";
+
+    // user owns 100_000_000_000_000, delegates 200_000_000_000_000
+    let block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_1),
+      joinStackingPool(wallet_1),
+      mainDelegateStx(200_000_000_000_000, wallet_1),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+    block.receipts[2].result.expectOk().expectBool(true);
+    // check total to be 100_000_000_000_000 instead of what user has delegated
+    expectTotalStackedByCycle(1, 0, 100_000_000_000_000, chain, deployer);
+
+    block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_2),
+      joinStackingPool(wallet_2),
+      mainDelegateStx(200_000_000_000_000, wallet_2),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+    block.receipts[2].result.expectOk().expectBool(true);
+    // check total to be 200_000_000_000_000 (100_000_000_000_000 + 100_000_000_000_000 already stacked) instead of what user has delegated
+    expectTotalStackedByCycle(1, 0, 200_000_000_000_000, chain, deployer);
+  },
+});
+
+Clarinet.test({
+  name: "Ensure that user can delegate how much he wants, but it will be locked just when the threshold is met",
+  // stx_liq_supply / threshold_25 == 1_000_000_000_000_000 / 20_000_000_000 = 50_000 STX)
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const mainDelegateStx = (amountUstx: number, user: Account) => {
+      return Tx.contractCall(
+        "main",
+        "delegate-stx",
+        [types.uint(amountUstx)],
+        user.address
+      );
+    };
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+    const wallet_2 = accounts.get("wallet_2")!;
+    const mainContract = deployer.address + ".main";
+
+    let block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_1),
+      joinStackingPool(wallet_1),
+      mainDelegateStx(49_000_000_000, wallet_1), // < 50_000_000_000 uSTX
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+    // console.log(block.receipts[2]);
+    console.log(block.receipts[2].events[0]["contract_event"].value);
+
+    block.receipts[2].result.expectOk().expectBool(false); // expect false, commit ignored
+
+    expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
+
+    expectTotalStackedByCycle(1, 0, 0, chain, deployer); // does not commit totally
+
+    block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_2),
+      joinStackingPool(wallet_2),
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+
+    block = chain.mineBlock([
+      // allowContractCaller(mainContract, undefined, wallet_2),
+      // joinStackingPool(wallet_2),
+      mainDelegateStx(1_000_000_000, wallet_2), // < 50_000_000_000 uSTX
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    // block.receipts[1].result.expectOk().expectBool(true);
+    console.log(block.receipts[0].events[0]["contract_event"].value);
+    // block.receipts[2].result.expectOk().expectBool(true);
+
+    expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
+
+    expectTotalStackedByCycle(1, 0, 50_000_000_000, chain, deployer); // commits totally what wallet_1 + wallet_2 delegated
+  },
+});

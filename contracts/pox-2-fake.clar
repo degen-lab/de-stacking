@@ -530,7 +530,7 @@
                                   (amount-ustx uint)
                                   (first-reward-cycle uint)
                                   (num-cycles uint))
-  (begin
+(begin
     ;; minimum uSTX must be met
     (asserts! (<= (get-stacking-minimum) amount-ustx)
               (err ERR_STACKING_THRESHOLD_NOT_MET))

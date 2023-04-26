@@ -80,7 +80,7 @@
   (asserts! (is-none (map-get? user-data {address: tx-sender})) err-already-in-pool)
   (try! (allow-contract-caller (as-contract tx-sender) none))
   (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
-  (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
+  (map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
   (ok true)))
 
 (define-public (quit-stacking-pool)
@@ -118,7 +118,6 @@
 (define-public (delegate-stx (amount-ustx uint))
   (let ((user tx-sender)
         (current-cycle (contract-call? .pox-2-fake current-pox-reward-cycle)))
-        (print (contract-call? .pox-2-fake current-pox-reward-cycle)) ;; u0
     (asserts! (check-caller-allowed) err-stacking-permission-denied)
     (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
     
@@ -161,11 +160,18 @@
 (define-read-only (get-SC-locked-balance)
 (var-get sc-locked-balance))
 
-;; private functions
-;; 
+(define-read-only (get-user-data (user principal)) 
+  (map-get? user-data {address: user}))
+
+(define-read-only (get-stx-liquid-supply) stx-liquid-supply)
 
 (define-read-only (check-pool-SC-pox-2-allowance)
   (is-some (contract-call? .pox-2-fake get-allowance-contract-callers tx-sender pool-contract)))
+
+(define-read-only (get-pox-addr-indices (reward-cycle uint))
+  (map-get? pox-addr-indices reward-cycle))
+;; private functions
+;; 
 
 (define-private (maybe-stack-aggregation-commit (current-cycle uint))
   (let ((reward-cycle (+ u1 current-cycle)))
@@ -173,53 +179,44 @@
             ;; Total stacked already reached minimum.
             ;; Call stack-aggregate-increase.
             ;; It might fail because called in the same cycle twice.
-      index (match (as-contract (contract-call? 'SP000000000000000000002Q6VF78.pox-2 stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
+      index (match (as-contract (contract-call? .pox-2-fake stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
               success (map-set last-aggregation reward-cycle block-height)
               error (begin (print {err-increase-ignored: error}) false))
             ;; Total stacked is still below minimum.
             ;; Just try to commit, it might fail because minimum not yet met
-      (match (as-contract (contract-call? 'SP000000000000000000002Q6VF78.pox-2 stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
+      (match (as-contract (contract-call? .pox-2-fake stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
         index (begin
+                (print reward-cycle)
                 (map-set pox-addr-indices reward-cycle index)
                 (map-set last-aggregation reward-cycle block-height))
-        error (begin (print {err-commit-ignored: error}) false))))) ;; ignore errors
-
-;; TODO: remove these 3 fns, they are public helpers
-(define-public (get-pox-addr-indices) 
-(ok (map-get? pox-addr-indices u1)))
-
-(define-public (call-stack-aggregation-commit-indexed) 
-(ok (as-contract (contract-call? .pox-2-fake stack-aggregation-commit-indexed (var-get pool-pox-address) u1))))
-
-(define-public (try-stack-delegation (user principal)) 
-(let ((start-burn-ht (+ burn-block-height u1))
-        (pox-address (var-get pool-pox-address))
-        ;; delegate the minimum of the delegated amount and stx balance (including locked stx)
-        (buffer-amount (var-get stx-buffer))
-        (user-account (stx-account user))
-        (allowed-amount (min (get-delegated-amount user) (+ (get locked user-account) (get unlocked user-account))))
-        (amount-ustx (if (> allowed-amount buffer-amount) (- allowed-amount buffer-amount) allowed-amount)))
-    ;; add this too TODO:
-    ;; (asserts! (var-get active) err-pox-address-deactivated)
-    (ok (contract-call? .pox-2-fake delegate-stack-stx
-             user amount-ustx
-             pox-address start-burn-ht u1))))
+        error (begin 
+                (print {err-commit-ignored: error}) false))))) ;; ignore errors
 
 (define-private (delegate-stx-inner (amount-ustx uint) (delegate-to principal) (until-burn-ht (optional uint)))
   (let ((result-revoke
           ;; Calls revoke and ignores result
           (contract-call? .pox-2-fake revoke-delegate-stx)))
     ;; Calls delegate-stx, converts any error to uint
-    (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
+    (match (contract-call? .pox-2-fake delegate-stx amount-ustx delegate-to until-burn-ht none)
       success (begin 
                 (map-set 
                   user-data 
                     {address: tx-sender} 
                     {
-                      is-in-pool: true,
-                      delegated-balance: (+ (default-to u0 (get delegated-balance (map-get? user-data {address:tx-sender}))) amount-ustx),
-                      locked-balance: (default-to u0 (get delegated-balance (map-get? user-data {address:tx-sender}))),
-                      until-block-ht: (default-to u0 until-burn-ht)})
+                      is-in-pool: (if (is-some (get is-in-pool (map-get? user-data {address: tx-sender}))) (unwrap-panic (get is-in-pool (map-get? user-data {address: tx-sender}))) false),
+                      delegated-balance: 
+                      (if   
+                        (is-some 
+                          (get delegated-balance (map-get? user-data {address: tx-sender}))) 
+                        (+ (unwrap-panic (get delegated-balance (map-get? user-data {address: tx-sender}))) amount-ustx)
+                        amount-ustx), 
+                      locked-balance: 
+                      (if 
+                        (is-some 
+                          (get locked-balance (map-get? user-data {address: tx-sender}))) 
+                        (unwrap-panic (get locked-balance (map-get? user-data {address: tx-sender}))) 
+                        u0) ,
+                      until-block-ht: (if (is-some until-burn-ht) (unwrap-panic until-burn-ht) u0)})
                 (ok success))
       error (err (* u1000 (to-uint error))))))
 
@@ -227,17 +224,43 @@
   (let ((start-burn-ht (+ burn-block-height u1))
         (pox-address (var-get pool-pox-address))
         ;; delegate the minimum of the delegated amount and stx balance (including locked stx)
-        (buffer-amount (var-get stx-buffer))
+        (buffer-amount u0)
         (user-account (stx-account user))
         (allowed-amount (min (get-delegated-amount user) (+ (get locked user-account) (get unlocked user-account))))
         (amount-ustx (if (> allowed-amount buffer-amount) (- allowed-amount buffer-amount) allowed-amount)))
-        (print allowed-amount)
-    ;; add this too TODO:
+    ;; TODO: add this too
     ;; (asserts! (var-get active) err-pox-address-deactivated)
-    (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stack-stx
+    (match (contract-call? .pox-2-fake delegate-stack-stx
              user amount-ustx
              pox-address start-burn-ht u1)
-      stacker-details  (ok stacker-details)
+      stacker-details 
+        (begin  
+          (map-set 
+                  user-data 
+                    {address: user} 
+                    {
+                      is-in-pool: 
+                      (if 
+                        (is-some 
+                          (get is-in-pool (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
+                        false),
+                      delegated-balance: 
+                      (if   
+                        (is-some 
+                          (get delegated-balance (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
+                        u0), 
+                      locked-balance: 
+                      (if 
+                        (is-some 
+                          (get locked-balance (map-get? user-data {address: user}))) 
+                        (+ (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) amount-ustx) 
+                        amount-ustx),
+                      until-block-ht: (+ start-burn-ht REWARD_CYCLE_LENGTH)})
+                      (print (map-get? user-data {address: user}))
+                                    (ok stacker-details))
+
       error (if (is-eq error 3) ;; check whether user is already stacked
               (delegate-stack-extend-increase user amount-ustx pox-address start-burn-ht)
               (err (* u1000 (to-uint error)))))))
@@ -248,10 +271,10 @@
                   (start-burn-ht uint))
   (let ((status (stx-account user)))
     (asserts! (>= amount-ustx (get locked status)) err-decrease-forbidden)
-    (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stack-extend
-             user pox-address u1)
+    (match (contract-call? .pox-2-fake delegate-stack-extend
+            user pox-address u1)
       success (if (> amount-ustx (get locked status))
-                (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stack-increase
+                (match (contract-call? .pox-2-fake delegate-stack-increase
                          user pox-address (- amount-ustx (get locked status)))
                   success-increase (ok {lock-amount: (get total-locked success-increase),
                                         stacker: user,
