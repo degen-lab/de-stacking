@@ -257,7 +257,7 @@
                           (get locked-balance (map-get? user-data {address: user}))) 
                         (+ (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) amount-ustx) 
                         amount-ustx),
-                      until-block-ht: (+ start-burn-ht REWARD_CYCLE_LENGTH)})
+                      until-block-ht: (+ (/ start-burn-ht REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
                       (print (map-get? user-data {address: user}))
                                     (ok stacker-details))
 
