@@ -131,7 +131,7 @@ Clarinet.test({
     block.receipts[1].result.expectOk().expectBool(true);
     block.receipts[2].result.expectOk().expectBool(true);
     console.log(
-      "200_000_000_000_000 delegated, 100_000_000_000_000 locked",
+      "200_000_000_000_000 delegated, 100_000_000_000_000 locked:",
       block.receipts[3].result
     );
     // check total to be 100_000_000_000_000 instead of what user has delegated
@@ -147,7 +147,7 @@ Clarinet.test({
     block.receipts[1].result.expectOk().expectBool(true);
     block.receipts[2].result.expectOk().expectBool(true);
     console.log(
-      "400_000_000_000_000 delegated, 100_000_000_000_000 locked",
+      "400_000_000_000_000 delegated, 100_000_000_000_000 locked:",
       block.receipts[3].result
     );
     // check total to be 200_000_000_000_000 (100_000_000_000_000 + 100_000_000_000_000 already stacked) instead of what user has delegated
@@ -189,7 +189,10 @@ Clarinet.test({
       getUserData(wallet_1, deployer),
       getUserData(wallet_2, deployer),
     ]);
-    console.log(block.receipts[0].result); // verify delegated-balance==locked-balance==49_000_000
+    console.log(
+      "delegated == locked == 1_000_000_000:",
+      block.receipts[0].result
+    ); // verify delegated-balance==locked-balance==1_000_000_000
     console.log(block.receipts[1].result); // verify is-none - not in stacking pool yet
     block.receipts[0].result.expectSome();
     block.receipts[1].result.expectNone();
@@ -215,7 +218,68 @@ Clarinet.test({
       getUserData(wallet_1, deployer),
       getUserData(wallet_2, deployer),
     ]);
-    console.log(block.receipts[0].result); // verify delegated-balance==locked-balance==49_000_000_000
-    console.log(block.receipts[1].result); // verify delegated-balance==locked-balance== 1_000_000_000
+    console.log(
+      "delegated-balance==locked-balance== 1_000_000_000:",
+      block.receipts[0].result
+    ); // verify delegated-balance==locked-balance== 1_000_000_000
+    console.log(
+      "delegated-balance==locked-balance==49_000_000_000:",
+      block.receipts[1].result
+    ); // verify delegated-balance==locked-balance==49_000_000_000
+  },
+});
+
+Clarinet.test({
+  name: "Ensure stack is extended",
+  // stx_liq_supply / threshold_25 == 1_000_000_000_000_000 / 20_000_000_000 = 50_000
+
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const mainDelegateStx = (amountUstx: number, user: Account) => {
+      return Tx.contractCall(
+        "main",
+        "delegate-stx",
+        [types.uint(amountUstx)],
+        user.address
+      );
+    };
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+    const wallet_2 = accounts.get("wallet_2")!;
+    const mainContract = deployer.address + ".main";
+
+    // Allow pool SC in pox-2, join stacking pool and delegate with wallet_1
+    let block = chain.mineBlock([
+      allowContractCaller(mainContract, undefined, wallet_1),
+      joinStackingPool(wallet_1),
+      mainDelegateStx(1_000_000_000, wallet_1), // < 50_000_000_000 uSTX
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true);
+    block.receipts[1].result.expectOk().expectBool(true);
+    block.receipts[2].result.expectOk().expectBool(false); // expect false, commit ignored
+    console.log(block.receipts[2]); // {err-commit-ignored:11}
+
+    // Check local user data
+    block = chain.mineBlock([getUserData(wallet_1, deployer)]);
+    console.log(
+      "delegated == locked == 1_000_000_000:",
+      block.receipts[0].result
+    ); // verify delegated-balance==locked-balance==1_000_000_000
+    block.receipts[0].result.expectSome();
+
+    expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
+    expectTotalStackedByCycle(1, 0, 0, chain, deployer); // does not commit totally
+
+    for (let i = 1; i <= 4198; i++) {
+      block = chain.mineBlock([]);
+    }
+
+    block = chain.mineBlock([
+      mainDelegateStx(50_000_000_000, wallet_1), // < 50_000_000_000 uSTX
+    ]);
+    block.receipts[0].result.expectOk().expectBool(true); // expect true, lock funds
+
+    block = chain.mineBlock([getUserData(wallet_1, deployer)]);
+
+    console.log(block.receipts[0].result);
   },
 });

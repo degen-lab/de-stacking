@@ -163,8 +163,6 @@
 (define-read-only (get-user-data (user principal)) 
   (map-get? user-data {address: user}))
 
-(define-read-only (get-stx-liquid-supply) stx-liquid-supply)
-
 (define-read-only (check-pool-SC-pox-2-allowance)
   (is-some (contract-call? .pox-2-fake get-allowance-contract-callers tx-sender pool-contract)))
 
@@ -203,12 +201,7 @@
                     {address: tx-sender} 
                     {
                       is-in-pool: (if (is-some (get is-in-pool (map-get? user-data {address: tx-sender}))) (unwrap-panic (get is-in-pool (map-get? user-data {address: tx-sender}))) false),
-                      delegated-balance: 
-                      (if   
-                        (is-some 
-                          (get delegated-balance (map-get? user-data {address: tx-sender}))) 
-                        (+ (unwrap-panic (get delegated-balance (map-get? user-data {address: tx-sender}))) amount-ustx)
-                        amount-ustx), 
+                      delegated-balance: amount-ustx, 
                       locked-balance: 
                       (if 
                         (is-some 
@@ -250,13 +243,8 @@
                           (get delegated-balance (map-get? user-data {address: user}))) 
                         (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
                         u0), 
-                      locked-balance: 
-                      (if 
-                        (is-some 
-                          (get locked-balance (map-get? user-data {address: user}))) 
-                        (+ (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) amount-ustx) 
-                        amount-ustx),
-                      until-block-ht: (+ (/ start-burn-ht REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
+                      locked-balance: amount-ustx,
+                      until-block-ht: (+ (* (/ start-burn-ht REWARD_CYCLE_LENGTH) REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
                                     (ok stacker-details))
 
       error (if (is-eq error 3) ;; check whether user is already stacked
@@ -298,9 +286,16 @@
                         (is-some (get until-block-ht (map-get? user-data {address: user})))
                         (+ (unwrap-panic (get until-block-ht (map-get? user-data {address: user}))) REWARD_CYCLE_LENGTH)
                         REWARD_CYCLE_LENGTH)})
-                        (print (get-user-data user))
+              (print (get-user-data user))
               (if (> amount-ustx (get locked status))          
-                (match (contract-call? .pox-2-fake delegate-stack-increase user pox-address (- amount-ustx (get locked status))) ;; to replace with local locked
+                (match (contract-call? .pox-2-fake delegate-stack-increase 
+                  user 
+                  pox-address 
+                  (- 
+                    amount-ustx 
+                    (if (is-some (get locked-balance (map-get? user-data {address: user}))) 
+                        (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) 
+                        u0)))
                   success-increase (begin
                                     (map-set user-data 
                                       {address: user} 
