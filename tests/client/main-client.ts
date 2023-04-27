@@ -47,6 +47,15 @@ export function delegateStackStxMany(stackers: Account[], user: Account) {
   );
 }
 
+export function getUserData(stacker: Account, user: Account) {
+  return Tx.contractCall(
+    "main",
+    "get-user-data",
+    [types.principal(stacker.address)],
+    user.address
+  );
+}
+
 // // admin functions
 
 // export function setActive(active: boolean, user: Account) {

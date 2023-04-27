@@ -186,7 +186,6 @@
             ;; Just try to commit, it might fail because minimum not yet met
       (match (as-contract (contract-call? .pox-2-fake stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
         index (begin
-                (print reward-cycle)
                 (map-set pox-addr-indices reward-cycle index)
                 (map-set last-aggregation reward-cycle block-height))
         error (begin 
@@ -258,7 +257,6 @@
                         (+ (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) amount-ustx) 
                         amount-ustx),
                       until-block-ht: (+ (/ start-burn-ht REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
-                      (print (map-get? user-data {address: user}))
                                     (ok stacker-details))
 
       error (if (is-eq error 3) ;; check whether user is already stacked
@@ -333,7 +331,7 @@
                       lock-amount: (get locked status),
                       stacker: user,
                       unlock-burn-height: (get unlock-burn-height success)})))
-                      
+
       error (err (* u1000000 (to-uint error))))))
 
 (define-read-only (get-delegated-amount (user principal))
