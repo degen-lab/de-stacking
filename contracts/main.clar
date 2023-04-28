@@ -90,7 +90,7 @@
   (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
   (let ((result-revoke
           ;; Calls revoke and ignores result
-          (contract-call? 'SP000000000000000000002Q6VF78.pox-2 revoke-delegate-stx)))
+          (contract-call? .pox-2-fake revoke-delegate-stx)))
        (try! (disallow-contract-caller pool-contract))
        (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
        (map-delete user-data {address: tx-sender})
