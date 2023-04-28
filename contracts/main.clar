@@ -23,6 +23,7 @@
 (define-constant err-not-in-pool (err u102))
 (define-constant err-allow-pool-in-pox-2-first (err u199))
 (define-constant err-insufficient-funds (err u200))
+(define-constant err-disallow-pool-in-pox-2-first (err u299))
 (define-constant err-full-stacking-pool (err u300))
 (define-constant err-decrease-forbidden (err u503))
 (define-constant err-stacking-permission-denied (err u609))
@@ -45,7 +46,7 @@
     version: 0x04,
     hashbytes: 0x83ed66860315e334010bbfb76eb3eef887efee0a})
 
-(define-data-var stx-buffer uint u1000000) ;; 1 STX
+(define-data-var stx-buffer uint u0) ;; 0 STX
 
 ;; data maps
 ;;
@@ -85,11 +86,15 @@
 
 (define-public (quit-stacking-pool)
 (begin
+  (asserts! (not (check-pool-SC-pox-2-allowance)) err-disallow-pool-in-pox-2-first)
   (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
-  (try! (disallow-contract-caller pool-contract))
-  (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
-  (map-delete user-data {address: tx-sender})
-  (ok true)))
+  (let ((result-revoke
+          ;; Calls revoke and ignores result
+          (contract-call? 'SP000000000000000000002Q6VF78.pox-2 revoke-delegate-stx)))
+       (try! (disallow-contract-caller pool-contract))
+       (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
+       (map-delete user-data {address: tx-sender})
+       (ok true))))
 
 (define-private (remove-stacker-stackers-list (address principal)) (not (is-eq tx-sender address)))
 

@@ -38,6 +38,10 @@ export function joinStackingPool(user: Account) {
   return Tx.contractCall("main", "join-stacking-pool", [], user.address);
 }
 
+export function quitStackingPool(user: Account) {
+  return Tx.contractCall("main", "quit-stacking-pool", [], user.address);
+}
+
 export function delegateStackStxMany(stackers: Account[], user: Account) {
   return Tx.contractCall(
     "main",

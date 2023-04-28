@@ -16,6 +16,15 @@ export function allowContractCaller(
   );
 }
 
+export function disallowContractCaller(contractCaller: string, user: Account) {
+  return Tx.contractCall(
+    "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.pox-2-fake",
+    "disallow-contract-caller",
+    [types.principal(contractCaller)],
+    user.address
+  );
+}
+
 export function delegateStx(amount: number, delegateTo: string, user: Account) {
   return Tx.contractCall(
     "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.pox-2-fake",
@@ -103,3 +112,12 @@ export function getPoxInfo(chain: Chain, user: Account) {
     user.address
   );
 }
+
+// export function getStackerInfo(chain: Chain, user: Account, stacker: Account) {
+//   return chain.contractCall(
+//     "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.pox-2-fake",
+//     "get-stacker-info",
+//     [types.principal(stacker)],
+//     user.address
+//   );
+// }
