@@ -4,7 +4,9 @@ description = ''
 authors = []
 telemetry = true
 cache_dir = '.\.cache'
-requirements = []
+
+[[project.requirements]]
+contract_id = 'ST000000000000000000002AMW42H.pox-2'
 [contracts.main]
 path = 'contracts/main.clar'
 clarity_version = 2

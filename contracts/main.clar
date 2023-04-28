@@ -31,7 +31,7 @@
 (define-constant first-deposit u0)
 (define-constant list-max-len u300)
 (define-constant pool-contract (as-contract tx-sender))
-(define-constant pox-2-contract (as-contract .pox-2-fake))
+(define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-2))
 ;; data vars
 ;;
 (define-data-var sc-total-balance uint u0)
@@ -90,7 +90,7 @@
   (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
   (let ((result-revoke
           ;; Calls revoke and ignores result
-          (contract-call? .pox-2-fake revoke-delegate-stx)))
+          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
        (try! (disallow-contract-caller pool-contract))
        (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
        (map-delete user-data {address: tx-sender})
@@ -122,7 +122,7 @@
 
 (define-public (delegate-stx (amount-ustx uint))
   (let ((user tx-sender)
-        (current-cycle (contract-call? .pox-2-fake current-pox-reward-cycle)))
+        (current-cycle (contract-call? 'ST000000000000000000002AMW42H.pox-2 current-pox-reward-cycle)))
     (asserts! (check-caller-allowed) err-stacking-permission-denied)
     (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
     
@@ -169,7 +169,7 @@
   (map-get? user-data {address: user}))
 
 (define-read-only (check-pool-SC-pox-2-allowance)
-  (is-some (contract-call? .pox-2-fake get-allowance-contract-callers tx-sender pool-contract)))
+  (is-some (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-allowance-contract-callers tx-sender pool-contract)))
 
 (define-read-only (get-pox-addr-indices (reward-cycle uint))
   (map-get? pox-addr-indices reward-cycle))
@@ -182,12 +182,12 @@
             ;; Total stacked already reached minimum.
             ;; Call stack-aggregate-increase.
             ;; It might fail because called in the same cycle twice.
-      index (match (as-contract (contract-call? .pox-2-fake stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
+      index (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-2 stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
               success (map-set last-aggregation reward-cycle block-height)
               error (begin (print {err-increase-ignored: error}) false))
             ;; Total stacked is still below minimum.
             ;; Just try to commit, it might fail because minimum not yet met
-      (match (as-contract (contract-call? .pox-2-fake stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
+      (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-2 stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
         index (begin
                 (map-set pox-addr-indices reward-cycle index)
                 (map-set last-aggregation reward-cycle block-height))
@@ -197,9 +197,9 @@
 (define-private (delegate-stx-inner (amount-ustx uint) (delegate-to principal) (until-burn-ht (optional uint)))
   (let ((result-revoke
           ;; Calls revoke and ignores result
-          (contract-call? .pox-2-fake revoke-delegate-stx)))
+          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
     ;; Calls delegate-stx, converts any error to uint
-    (match (contract-call? .pox-2-fake delegate-stx amount-ustx delegate-to until-burn-ht none)
+    (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
       success (begin 
                 (map-set 
                   user-data 
@@ -227,11 +227,11 @@
         (amount-ustx (if (> allowed-amount buffer-amount) (- allowed-amount buffer-amount) allowed-amount)))
     ;; TODO: add this too
     ;; (asserts! (var-get active) err-pox-address-deactivated)
-    (match (contract-call? .pox-2-fake delegate-stack-stx
+    (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-stx
              user amount-ustx
              pox-address start-burn-ht u1)
       stacker-details 
-        (begin  
+        (begin 
           (map-set 
                   user-data 
                     {address: user} 
@@ -254,7 +254,7 @@
 
       error (if (is-eq error 3) ;; check whether user is already stacked
               (delegate-stack-extend-increase user amount-ustx pox-address start-burn-ht)
-              (err (* u1000 (to-uint error)))))))
+              (err (to-uint error))))))
 
 (define-private (delegate-stack-extend-increase (user principal)
                   (amount-ustx uint)
@@ -262,7 +262,7 @@
                   (start-burn-ht uint))
   (let ((status (stx-account user)))
     (asserts! (>= amount-ustx (get locked status)) err-decrease-forbidden)
-    (match (contract-call? .pox-2-fake delegate-stack-extend
+    (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-extend
             user pox-address u1)
       success (begin 
               (map-set user-data 
@@ -291,9 +291,8 @@
                         (is-some (get until-block-ht (map-get? user-data {address: user})))
                         (+ (unwrap-panic (get until-block-ht (map-get? user-data {address: user}))) REWARD_CYCLE_LENGTH)
                         REWARD_CYCLE_LENGTH)})
-              (print (get-user-data user))
               (if (> amount-ustx (get locked status))          
-                (match (contract-call? .pox-2-fake delegate-stack-increase 
+                (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-increase 
                   user 
                   pox-address 
                   (- 
@@ -335,7 +334,7 @@
       error (err (* u1000000 (to-uint error))))))
 
 (define-read-only (get-delegated-amount (user principal))
-  (default-to u0 (get amount-ustx (contract-call? .pox-2-fake get-delegation-info user))))
+  (default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-delegation-info user))))
 
 (define-private (min (amount-1 uint) (amount-2 uint))
   (if (< amount-1 amount-2)

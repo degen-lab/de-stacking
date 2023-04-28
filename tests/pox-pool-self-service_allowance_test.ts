@@ -231,7 +231,7 @@ Clarinet.test({
     block = chain.mineBlock([
       allowContractCaller(mainContract, undefined, wallet_2),
       joinStackingPool(wallet_2),
-      mainDelegateStx(49_000_000_000, wallet_2), // < 50_000_000_000 uSTX
+      mainDelegateStx(124_000_000_000, wallet_2), // < 50_000_000_000 uSTX
     ]);
     block.receipts[0].result.expectOk().expectBool(true);
     block.receipts[1].result.expectOk().expectBool(true);
@@ -239,7 +239,7 @@ Clarinet.test({
     console.log(block.receipts[2]); // no print, returns ok true => amount commited
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 50_000_000_000, chain, deployer); // commits totally the amount wallet_1 + wallet_2 delegated
+    expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally the amount wallet_1 + wallet_2 delegated
 
     block = chain.mineBlock([
       getUserData(wallet_1, deployer),
@@ -250,15 +250,14 @@ Clarinet.test({
       block.receipts[0].result
     ); // verify delegated-balance==locked-balance== 1_000_000_000
     console.log(
-      "delegated-balance==locked-balance==49_000_000_000:",
+      "delegated-balance==locked-balance==124_000_000_000:",
       block.receipts[1].result
-    ); // verify delegated-balance==locked-balance==49_000_000_000
+    ); // verify delegated-balance==locked-balance==124_000_000_000
   },
 });
 
 Clarinet.test({
   name: "Ensure stack is extended",
-  // stx_liq_supply / threshold_25 == 1_000_000_000_000_000 / 20_000_000_000 = 50_000
 
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const mainDelegateStx = (amountUstx: number, user: Account) => {
@@ -278,7 +277,7 @@ Clarinet.test({
     let block = chain.mineBlock([
       allowContractCaller(mainContract, undefined, wallet_1),
       joinStackingPool(wallet_1),
-      mainDelegateStx(50_000_000_000, wallet_1),
+      mainDelegateStx(125_000_000_000, wallet_1),
     ]);
     block.receipts[0].result.expectOk().expectBool(true);
     block.receipts[1].result.expectOk().expectBool(true);
@@ -288,17 +287,17 @@ Clarinet.test({
     // Check local user data
     block = chain.mineBlock([getUserData(wallet_1, deployer)]);
     console.log(
-      "delegated == locked == 50_000_000_000:",
+      "delegated == locked == 125_000_000_000:",
       block.receipts[0].result
-    ); // verify delegated-balance==locked-balance==50_000_000_000
+    ); // verify delegated-balance==locked-balance==125_000_000_000
     block.receipts[0].result.expectSome();
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 50_000_000_000, chain, deployer); // commits totally
+    expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.pox-2-fake",
+        "ST000000000000000000002AMW42H.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address
@@ -307,14 +306,14 @@ Clarinet.test({
 
     console.log("STACKER INFO BEFORE:", block.receipts[0].result);
 
-    for (let i = 1; i <= 4196; i++) {
+    for (let i = 1; i <= 2100; i++) {
       // why only > 4198 works??
       block = chain.mineBlock([]);
     }
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM.pox-2-fake",
+        "ST000000000000000000002AMW42H.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address
@@ -323,14 +322,15 @@ Clarinet.test({
 
     console.log("STACKER INFO AFTER:", block.receipts[0].result);
 
-    block = chain.mineBlock([
-      mainDelegateStx(50_000_000_000, wallet_1), // < 50_000_000_000 uSTX
-    ]);
-    block.receipts[0].result.expectOk().expectBool(true); // expect true, lock funds
+    block = chain.mineBlock([mainDelegateStx(125_000_000_000, wallet_1)]);
+    block.receipts[0].result.expectOk().expectBool(true); // expect true, lock funds, extend lock period
 
     block = chain.mineBlock([getUserData(wallet_1, deployer)]);
 
-    console.log(block.receipts[0].result);
+    console.log(
+      "EXTEND lock period until u6300 block-height:",
+      block.receipts[0].result
+    );
   },
 });
 
@@ -385,7 +385,6 @@ Clarinet.test({
 
 Clarinet.test({
   name: "Ensure that user can delegate how much he wants, but it will be locked just when the threshold is met + stack-increase after",
-  // stx_liq_supply / threshold_25 == 1_000_000_000_000_000 / 20_000_000_000 = 50_000
 
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const mainDelegateStx = (amountUstx: number, user: Account) => {
@@ -409,7 +408,7 @@ Clarinet.test({
       block = chain.mineBlock([
         allowContractCaller(mainContract, undefined, stacker),
         joinStackingPool(stacker),
-        mainDelegateStx(1_000_000_000, stacker), // < 50_000_000_000 uSTX
+        mainDelegateStx(1_000_000_000, stacker), // < 125_000_000_000 uSTX
       ]);
       block.receipts[0].result.expectOk().expectBool(true);
       block.receipts[1].result.expectOk().expectBool(true);
@@ -437,7 +436,7 @@ Clarinet.test({
     block = chain.mineBlock([
       allowContractCaller(mainContract, undefined, wallet_4),
       joinStackingPool(wallet_4),
-      mainDelegateStx(47_000_000_000, wallet_4), // < 50_000_000_000 uSTX
+      mainDelegateStx(122_000_000_000, wallet_4), // < 125_000_000_000 uSTX
     ]);
     block.receipts[0].result.expectOk().expectBool(true);
     block.receipts[1].result.expectOk().expectBool(true);
@@ -445,14 +444,14 @@ Clarinet.test({
     console.log(block.receipts[2]); // no print, returns ok true => amount commited
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 50_000_000_000, chain, deployer); // commits totally the amount wallet_1 + wallet_2 delegated
+    expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally the amount wallet_1 + wallet_2 delegated
 
     for (let i = 5; i <= 7; i++) {
       let stacker = accounts.get(`wallet_${i}`)!;
       block = chain.mineBlock([
         allowContractCaller(mainContract, undefined, stacker),
         joinStackingPool(stacker),
-        mainDelegateStx(1_000_000_000, stacker), // < 50_000_000_000 uSTX
+        mainDelegateStx(1_000_000_000, stacker), // < 125_000_000_000 uSTX
       ]);
       block.receipts[0].result.expectOk().expectBool(true);
       block.receipts[1].result.expectOk().expectBool(true);
@@ -473,13 +472,13 @@ Clarinet.test({
     }
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 53_000_000_000, chain, deployer); // does not commit totally
+    expectTotalStackedByCycle(1, 0, 128_000_000_000, chain, deployer); // does not commit totally
 
     // Allow pool SC in pox-2, join stacking pool and delegate with wallet_8
     block = chain.mineBlock([
       allowContractCaller(mainContract, undefined, wallet_8),
       joinStackingPool(wallet_8),
-      mainDelegateStx(47_000_000_000, wallet_8), // < 50_000_000_000 uSTX
+      mainDelegateStx(122_000_000_000, wallet_8), // < 125_000_000_000 uSTX
     ]);
     block.receipts[0].result.expectOk().expectBool(true);
     block.receipts[1].result.expectOk().expectBool(true);
@@ -487,13 +486,13 @@ Clarinet.test({
     console.log(block.receipts[2]); // no print, returns ok true => amount commited
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 100_000_000_000, chain, deployer); // commits totally the amount wallet_1, wallet_2, ... wallet_8 delegated
+    expectTotalStackedByCycle(1, 0, 250_000_000_000, chain, deployer); // commits totally the amount wallet_1, wallet_2, ... wallet_8 delegated
 
     block = chain.mineBlock([getUserData(wallet_8, deployer)]);
     console.log(
-      "delegated-balance==locked-balance==47_000_000_000:",
+      "delegated-balance==locked-balance==122_000_000_000:",
       block.receipts[0].result
-    ); // verify delegated-balance==locked-balance==47_000_000_000
+    ); // verify delegated-balance==locked-balance==122_000_000_000
   },
 });
 
@@ -519,7 +518,7 @@ Clarinet.test({
     let block = chain.mineBlock([
       allowContractCaller(mainContract, undefined, wallet_1),
       joinStackingPool(wallet_1),
-      mainDelegateStx(50_000_000_000, wallet_1),
+      mainDelegateStx(125_000_000_000, wallet_1), // min increment stx = 125717355363
     ]);
     block.receipts[0].result.expectOk().expectBool(true);
     block.receipts[1].result.expectOk().expectBool(true);
@@ -529,16 +528,31 @@ Clarinet.test({
     // Check local user data
     block = chain.mineBlock([getUserData(wallet_1, deployer)]);
     console.log(
-      "delegated == locked == 50_000_000_000:",
+      "delegated == locked == 125_000_000_000:",
       block.receipts[0].result
-    ); // verify delegated-balance==locked-balance==50_000_000_000
+    ); // verify delegated-balance==locked-balance==125_000_000_000
     block.receipts[0].result.expectSome();
 
     expectPartialStackedByCycle(poxAddrFP, 1, 0, chain, deployer); // does not commit partially
-    expectTotalStackedByCycle(1, 0, 50_000_000_000, chain, deployer); // commits totally
+    expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally
 
-    block = chain.mineBlock([mainDelegateStx(55_000_000_000, wallet_1)]); // err 26 (ERR_STACK_EXTEND_NOT_LOCKED) - how does stack-extend-increase work?
-    // block.receipts[0].result.expectOk().expectBool(true);
+    // one cycle (== 2100) blocks pass
+    for (let i = 1; i <= 2100; i++) {
+      block = chain.mineBlock([]);
+    }
+
+    // increase stacked amount
+
+    block = chain.mineBlock([mainDelegateStx(126_000_000_000, wallet_1)]); // err 26 (ERR_STACK_EXTEND_NOT_LOCKED) - how does stack-extend-increase work?
+    block.receipts[0].result.expectOk().expectBool(true);
     console.log(block.receipts[0]);
+
+    // Check local user data
+    block = chain.mineBlock([getUserData(wallet_1, deployer)]);
+    console.log(
+      "delegated == locked == 126_000_000_000 until block 6300:",
+      block.receipts[0].result
+    ); // verify delegated-balance==locked-balance==126_000_000_000 until 2nd reward cycle's end (6300 block height)
+    block.receipts[0].result.expectSome();
   },
 });
