@@ -240,20 +240,6 @@
                 (ok success))
       error (err (* u1000 (to-uint error))))))
 
-(define-private (increment-sc-delegated-balance (amount-ustx uint)) 
-(var-set sc-delegated-balance (+ (var-get sc-delegated-balance) amount-ustx)))
-
-(define-private (decrement-sc-delegated-balance (amount-ustx uint)) 
-(var-set sc-delegated-balance (- (var-get sc-delegated-balance) amount-ustx)))
-
-(define-private (check-can-decrement-delegated-balance (amount-ustx uint)) 
-(if 
-  (< 
-    (var-get sc-delegated-balance) 
-    amount-ustx) 
-  false
-  true))
-
 (define-private (lock-delegated-stx (user principal))
   (let ((start-burn-ht (+ burn-block-height u1))
         (pox-address (var-get pool-pox-address))
@@ -269,6 +255,8 @@
              pox-address start-burn-ht u1)
       stacker-details 
         (begin 
+        (print "stacker-details")
+        (print (get lock-amount stacker-details))
           (map-set 
                   user-data 
                     {address: user} 
@@ -285,9 +273,10 @@
                           (get delegated-balance (map-get? user-data {address: user}))) 
                         (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
                         u0), 
-                      locked-balance: amount-ustx,
+                      locked-balance: (get lock-amount stacker-details),
                       until-block-ht: (+ (* (/ start-burn-ht REWARD_CYCLE_LENGTH) REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
-                                    (ok stacker-details))
+          ;; TODO: handle sc-locked-balance here
+          (ok stacker-details))
 
       error (if (is-eq error 3) ;; check whether user is already stacked
               (delegate-stack-extend-increase user amount-ustx pox-address start-burn-ht)
@@ -372,6 +361,20 @@
 
 (define-read-only (get-delegated-amount (user principal))
   (default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-delegation-info user))))
+
+(define-private (increment-sc-delegated-balance (amount-ustx uint)) 
+(var-set sc-delegated-balance (+ (var-get sc-delegated-balance) amount-ustx)))
+
+(define-private (decrement-sc-delegated-balance (amount-ustx uint)) 
+(var-set sc-delegated-balance (- (var-get sc-delegated-balance) amount-ustx)))
+
+(define-private (check-can-decrement-delegated-balance (amount-ustx uint)) 
+(if 
+  (< 
+    (var-get sc-delegated-balance) 
+    amount-ustx) 
+  false
+  true))
 
 (define-private (min (amount-1 uint) (amount-2 uint))
   (if (< amount-1 amount-2)
