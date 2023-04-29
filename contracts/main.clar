@@ -25,6 +25,8 @@
 (define-constant err-insufficient-funds (err u200))
 (define-constant err-disallow-pool-in-pox-2-first (err u299))
 (define-constant err-full-stacking-pool (err u300))
+(define-constant err-future-reward-not-covered (err u333))
+(define-constant err-not-delegated-that-amount (err u396))
 (define-constant err-decrease-forbidden (err u503))
 (define-constant err-stacking-permission-denied (err u609))
 
@@ -38,6 +40,7 @@
 (define-data-var sc-delegated-balance uint u0)
 (define-data-var sc-owned-balance uint u0)
 (define-data-var sc-locked-balance uint u0)
+(define-data-var minimum-deposit-amount-liquidity-provider uint u0) ;; minimum amount for the liquidity provider to transfer after deploy
 (define-data-var stackers-list (list 300 principal) (list tx-sender))
 (define-data-var liquidity-provider principal tx-sender)
 
@@ -70,6 +73,8 @@
 (define-public (deposit-stx-SC-owner (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+  ;; `TODO: set a minimum deposit amount based on pox info, to make sure future rewards are covered
+  (asserts! (> amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
   (try! (as-contract (stx-transfer? amount tx-sender (var-get liquidity-provider))))
   (var-set sc-total-balance (+ amount (var-get sc-total-balance)))
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
@@ -197,10 +202,26 @@
 (define-private (delegate-stx-inner (amount-ustx uint) (delegate-to principal) (until-burn-ht (optional uint)))
   (let ((result-revoke
           ;; Calls revoke and ignores result
-          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
+          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx))
+        (user-delegated-balance 
+          (if 
+            (is-some 
+              (get delegated-balance (map-get? user-data {address: tx-sender})))
+              (unwrap-panic (get delegated-balance (map-get? user-data {address: tx-sender})))
+              u0)))
+        (if 
+            (is-ok result-revoke) 
+            (if 
+              (unwrap-panic result-revoke) 
+              (begin 
+                (asserts! (check-can-decrement-delegated-balance user-delegated-balance) err-not-delegated-that-amount) 
+                (decrement-sc-delegated-balance user-delegated-balance)) 
+              (decrement-sc-delegated-balance u0)) 
+            (decrement-sc-delegated-balance u0))
     ;; Calls delegate-stx, converts any error to uint
     (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
       success (begin 
+                (increment-sc-delegated-balance amount-ustx)
                 (map-set 
                   user-data 
                     {address: tx-sender} 
@@ -214,8 +235,24 @@
                         (unwrap-panic (get locked-balance (map-get? user-data {address: tx-sender}))) 
                         u0) ,
                       until-block-ht: (if (is-some until-burn-ht) (unwrap-panic until-burn-ht) u0)})
+                (print "sc delegated balance")
+                (print (var-get sc-delegated-balance))
                 (ok success))
       error (err (* u1000 (to-uint error))))))
+
+(define-private (increment-sc-delegated-balance (amount-ustx uint)) 
+(var-set sc-delegated-balance (+ (var-get sc-delegated-balance) amount-ustx)))
+
+(define-private (decrement-sc-delegated-balance (amount-ustx uint)) 
+(var-set sc-delegated-balance (- (var-get sc-delegated-balance) amount-ustx)))
+
+(define-private (check-can-decrement-delegated-balance (amount-ustx uint)) 
+(if 
+  (< 
+    (var-get sc-delegated-balance) 
+    amount-ustx) 
+  false
+  true))
 
 (define-private (lock-delegated-stx (user principal))
   (let ((start-burn-ht (+ burn-block-height u1))
