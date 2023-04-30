@@ -24,7 +24,11 @@ import {
 
 import { broadcastAllowContractCallerContracCall } from "./allowContractCaller";
 import { afterAll, beforeAll, describe, it } from "vitest";
-import { broadcastDelegateStackStx, broadcastDelegateStx } from "./helper-fp";
+import {
+  broadcastDelegateStackStx,
+  broadcastDelegateStx,
+  broadcastJoinPool,
+} from "./helper-fp";
 
 describe("testing stacking under epoch 2.1", () => {
   let orchestrator: DevnetNetworkOrchestrator;
@@ -42,7 +46,7 @@ describe("testing stacking under epoch 2.1", () => {
   it("test delegation with fp for three cycles", async () => {
     const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
 
-    let chainUpdate = await waitForRewardCycleId(network, orchestrator, 1);
+    let chainUpdate = await waitForRewardCycleId(network, orchestrator, 2);
     console.log("chain update", chainUpdate.new_blocks[0].block.metadata);
 
     let poxInfo = await getPoxInfo(network);
@@ -54,29 +58,42 @@ describe("testing stacking under epoch 2.1", () => {
       senderKey: Accounts.WALLET_4.secretKey,
     });
 
-    // await broadcastDelegateStx({
-    //   amountUstx: 10_000_000_000,
-    //   user: Accounts.WALLET_4,
-    //   nonce: 1,
-    //   network,
-    // });
+    await broadcastJoinPool({ nonce: 1, network, user: Accounts.WALLET_4 });
+    console.log(
+      await broadcastJoinPool({ nonce: 1, network, user: Accounts.WALLET_4 })
+    );
+    await broadcastDelegateStx({
+      amountUstx: 10_000_000_000,
+      user: Accounts.WALLET_4,
+      nonce: 1,
+      network,
+    });
 
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // console.log(
-    //   "** " +
-    //     (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-    //       .bitcoin_anchor_block_identifier.index
-    // );
-    // console.log(JSON.stringify(chainUpdate));
+    console.log(
+      await broadcastDelegateStx({
+        amountUstx: 10_000_000_000,
+        user: Accounts.WALLET_4,
+        nonce: 2,
+        network,
+      })
+    );
 
-    // await waitForRewardCycleId(network, orchestrator, 3);
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // console.log(
-    //   "** " +
-    //     (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-    //       .bitcoin_anchor_block_identifier.index
-    // );
-    // console.log(JSON.stringify(chainUpdate));
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    console.log(
+      "** " +
+        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
+          .bitcoin_anchor_block_identifier.index
+    );
+    console.log(JSON.stringify(chainUpdate));
+
+    await waitForRewardCycleId(network, orchestrator, 3);
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    console.log(
+      "** " +
+        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
+          .bitcoin_anchor_block_identifier.index
+    );
+    console.log("\n", JSON.stringify(chainUpdate));
 
     // await broadcastDelegateStx({
     //   amountUstx: 11_000_000_000,

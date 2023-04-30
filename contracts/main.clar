@@ -37,9 +37,11 @@
 ;; data vars
 ;;
 (define-data-var sc-total-balance uint u0)
-(define-data-var sc-delegated-balance uint u0)
+;; (define-data-var sc-delegated-balance uint u0)
+(define-map sc-delegated-balance { reward-cycle: uint } { amount-ustx: uint })
+(define-map sc-locked-balance { reward-cycle: uint } { amount-ustx:uint })
 (define-data-var sc-owned-balance uint u0)
-(define-data-var sc-locked-balance uint u0)
+(define-data-var sc-reserved-balance uint u0)
 (define-data-var minimum-deposit-amount-liquidity-provider uint u0) ;; minimum amount for the liquidity provider to transfer after deploy
 (define-data-var stackers-list (list 300 principal) (list tx-sender))
 (define-data-var liquidity-provider principal tx-sender)
@@ -70,11 +72,23 @@
 (allow-contract-caller (as-contract tx-sender) none)
 ;; public functions
 ;;
+
+(define-public (set-pool-pox-address (new-pool-pox-address {hashbytes: (buff 32), version: (buff 1)})) 
+  (begin 
+    (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+    (ok (var-set pool-pox-address new-pool-pox-address))))
+
+(define-public (set-liquidity-provider (new-liquidity-provider principal)) 
+  (begin 
+    (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+    (asserts! (is-some (map-get? user-data {address: new-liquidity-provider})) err-not-in-pool) ;; new liquidity provider should be in pool
+    (ok (var-set liquidity-provider new-liquidity-provider))))
+
 (define-public (deposit-stx-SC-owner (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
-  ;; `TODO: set a minimum deposit amount based on pox info, to make sure future rewards are covered
-  (asserts! (> amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
+  ;; `TODO: set a minimum deposit amount based on pox info, to make sure future rewards are covered: minimum-deposit-amount-liquidity-provider
+  (asserts! (>= amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
   (try! (as-contract (stx-transfer? amount tx-sender (var-get liquidity-provider))))
   (var-set sc-total-balance (+ amount (var-get sc-total-balance)))
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
@@ -103,12 +117,13 @@
 
 (define-private (remove-stacker-stackers-list (address principal)) (not (is-eq tx-sender address)))
 
-(define-public (lock-funds-future-rewards (amount uint)) 
+(define-public (reserve-funds-future-rewards (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
   (asserts! (>= (var-get sc-owned-balance) amount) err-insufficient-funds) 
+  (asserts! (>= amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
   (var-set sc-owned-balance (- (var-get sc-owned-balance) amount))
-  (var-set sc-locked-balance (+ (var-get sc-locked-balance) amount))
+  (var-set sc-reserved-balance (+ (var-get sc-reserved-balance) amount))
   (ok true)))
 
 (define-public (allow-contract-caller (caller principal) (until-burn-ht (optional uint)))
@@ -123,6 +138,17 @@
   (begin
     (asserts! (is-eq tx-sender contract-caller) err-stacking-permission-denied)
     (ok (map-delete allowance-contract-callers { sender: tx-sender, contract-caller: caller}))))
+
+;; (define-public (reward-distribution (rewarded-burn-block uint)) 
+;;   (let ((cycle-first-block 
+;;           (contract-call? .pox-2-fake reward-cycle-to-burn-height 
+;;             (contract-call? .pox-2-fake burn-height-to-reward-cycle rewarded-burn-block)))
+;;         (stackers-list-at-burn-height (at-block (unwrap-panic (get-burn-block-info? header-hash cycle-first-block)) (var-get stackers-list)))) 
+;;       ;; 
+;;         ))
+
+(define-private (weight-calculator (stacker principal) (stacker-locked uint) (total-locked uint) (liquidity-provider-locked uint)) 
+  (/ stacker-locked (+ total-locked liquidity-provider-locked)))
 
 
 (define-public (delegate-stx (amount-ustx uint))
@@ -167,8 +193,8 @@
 (define-read-only (get-SC-total-balance) 
 (var-get sc-total-balance))
 
-(define-read-only (get-SC-locked-balance)
-(var-get sc-locked-balance))
+(define-read-only (get-SC-locked-balance (reward-cycle uint))
+(get amount-ustx (map-get? sc-locked-balance {reward-cycle: reward-cycle})))
 
 (define-read-only (get-user-data (user principal)) 
   (map-get? user-data {address: user}))
@@ -214,14 +240,14 @@
             (if 
               (unwrap-panic result-revoke) 
               (begin 
-                (asserts! (check-can-decrement-delegated-balance user-delegated-balance) err-not-delegated-that-amount) 
-                (decrement-sc-delegated-balance user-delegated-balance)) 
-              (decrement-sc-delegated-balance u0)) 
-            (decrement-sc-delegated-balance u0))
+                (asserts! (check-can-decrement-delegated-balance user-delegated-balance (contract-call? .pox-2-fake burn-height-to-reward-cycle burn-block-height)) err-not-delegated-that-amount) 
+                (decrement-sc-delegated-balance user-delegated-balance (get-next-reward-cycle))) 
+              (decrement-sc-delegated-balance u0 (get-next-reward-cycle))) 
+            (decrement-sc-delegated-balance u0 (get-next-reward-cycle)))
     ;; Calls delegate-stx, converts any error to uint
     (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
       success (begin 
-                (increment-sc-delegated-balance amount-ustx)
+                (increment-sc-delegated-balance amount-ustx (get-next-reward-cycle))
                 (map-set 
                   user-data 
                     {address: tx-sender} 
@@ -236,7 +262,7 @@
                         u0) ,
                       until-block-ht: (if (is-some until-burn-ht) (unwrap-panic until-burn-ht) u0)})
                 (print "sc delegated balance")
-                (print (var-get sc-delegated-balance))
+                (print (unwrap-panic (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: (get-next-reward-cycle)}))))
                 (ok success))
       error (err (* u1000 (to-uint error))))))
 
@@ -255,8 +281,6 @@
              pox-address start-burn-ht u1)
       stacker-details 
         (begin 
-        (print "stacker-details")
-        (print (get lock-amount stacker-details))
           (map-set 
                   user-data 
                     {address: user} 
@@ -275,12 +299,13 @@
                         u0), 
                       locked-balance: (get lock-amount stacker-details),
                       until-block-ht: (+ (* (/ start-burn-ht REWARD_CYCLE_LENGTH) REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
+          (increment-sc-locked-balance (get lock-amount stacker-details) (get-next-reward-cycle))
           ;; TODO: handle sc-locked-balance here
           (ok stacker-details))
 
       error (if (is-eq error 3) ;; check whether user is already stacked
               (delegate-stack-extend-increase user amount-ustx pox-address start-burn-ht)
-              (err (to-uint error))))))
+              (err (* u1000 (to-uint error)))))))
 
 (define-private (delegate-stack-extend-increase (user principal)
                   (amount-ustx uint)
@@ -291,6 +316,8 @@
     (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-extend
             user pox-address u1)
       success (begin 
+              (print "success")
+              (print success)
               (map-set user-data 
                       {address: user} 
                       {
@@ -327,6 +354,8 @@
                         (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) 
                         u0)))
                   success-increase (begin
+                                    (print "success-increase")
+                                    (print success-increase)
                                     (map-set user-data 
                                       {address: user} 
                                       {
@@ -342,41 +371,73 @@
                                             (get delegated-balance (map-get? user-data {address: user}))) 
                                           (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
                                           u0), 
-                                      locked-balance: amount-ustx,
+                                      locked-balance: (get total-locked success-increase),
                                       until-block-ht: 
                                         (if 
                                           (is-some (get until-block-ht (map-get? user-data {address: user})))
                                           (unwrap-panic (get until-block-ht (map-get? user-data {address: user})))
                                           u0)})
+                                    (increment-sc-locked-balance 
+                                      (- amount-ustx 
+                                        (if (is-some (get locked-balance (map-get? user-data {address: user}))) 
+                                        (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) 
+                                        u0)) (get-next-reward-cycle))
                                     (ok {lock-amount: (get total-locked success-increase),
                                         stacker: user,
                                         unlock-burn-height: (get unlock-burn-height success)}))
-                  error-increase (err (* u1000000000 (to-uint error-increase))))
+                  error-increase (begin (print "error-increase") (err (* u1000000000 (to-uint error-increase)))))
                 (ok {
                       lock-amount: (get locked status),
                       stacker: user,
                       unlock-burn-height: (get unlock-burn-height success)})))
-
-      error (err (* u1000000 (to-uint error))))))
+      error (begin (print "error-extend") (err (* u1000000 (to-uint error)))))))
 
 (define-read-only (get-delegated-amount (user principal))
   (default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-delegation-info user))))
 
-(define-private (increment-sc-delegated-balance (amount-ustx uint)) 
-(var-set sc-delegated-balance (+ (var-get sc-delegated-balance) amount-ustx)))
+(define-private (increment-sc-delegated-balance (amount-ustx uint) (reward-cycle uint))
+(let ((incremented-amount 
+        (if 
+          (is-some 
+            (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) 
+          (+ (unwrap-panic (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) amount-ustx) 
+          amount-ustx)))  
+      (map-set sc-delegated-balance {reward-cycle: reward-cycle} {amount-ustx: incremented-amount})))
 
-(define-private (decrement-sc-delegated-balance (amount-ustx uint)) 
-(var-set sc-delegated-balance (- (var-get sc-delegated-balance) amount-ustx)))
+(define-private (increment-sc-locked-balance (amount-ustx uint) (reward-cycle uint)) 
+(let ((incremented-amount 
+        (if 
+          (is-some 
+            (get amount-ustx (map-get? sc-locked-balance {reward-cycle: reward-cycle}))) 
+          (+ (unwrap-panic (get amount-ustx (map-get? sc-locked-balance {reward-cycle: reward-cycle}))) amount-ustx) 
+          amount-ustx)))  
+      (map-set sc-locked-balance {reward-cycle: reward-cycle} {amount-ustx: incremented-amount})))
 
-(define-private (check-can-decrement-delegated-balance (amount-ustx uint)) 
+(define-private (decrement-sc-delegated-balance (amount-ustx uint) (reward-cycle uint)) 
+(let ((decremented-amount 
+        (if 
+          (is-some 
+            (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) 
+          (- (unwrap-panic (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) amount-ustx) 
+          u0)))  
+      (map-set sc-delegated-balance {reward-cycle: reward-cycle} {amount-ustx: decremented-amount})))
+
+(define-private (check-can-decrement-delegated-balance (amount-ustx uint) (reward-cycle uint)) 
 (if 
-  (< 
-    (var-get sc-delegated-balance) 
-    amount-ustx) 
-  false
-  true))
+  (is-some 
+    (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) 
+  (if 
+    (< 
+      (unwrap-panic (get amount-ustx (map-get? sc-delegated-balance {reward-cycle: reward-cycle}))) 
+      amount-ustx) 
+    false 
+    true) 
+  false))
 
 (define-private (min (amount-1 uint) (amount-2 uint))
   (if (< amount-1 amount-2)
     amount-1
     amount-2))
+
+(define-private (get-next-reward-cycle) 
+(+ (contract-call? .pox-2-fake burn-height-to-reward-cycle burn-block-height) u1))

@@ -11,14 +11,38 @@ import {
   uintCV,
 } from "@stacks/transactions";
 import { StacksNetwork } from "@stacks/network";
-import {  Accounts } from "./constants";
+import { Accounts } from "./constants";
 import {
   HelperContract,
+  mainContract,
   poxPoolsSelfServiceContract,
 } from "./contracts";
 import { decodeBtcAddress } from "@stacks/stacking";
 import { toBytes } from "@stacks/common";
 import { handleContractCall } from "./helpers";
+
+export async function broadcastJoinPool({
+  nonce,
+  network,
+  user,
+}: {
+  nonce: number;
+  network: StacksNetwork;
+  user: { stxAddress: string; secretKey: string };
+}) {
+  let txOptions = {
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.JoinStackingPool.name,
+    functionArgs: mainContract.Functions.JoinStackingPool.args({}),
+    nonce,
+    network,
+    anchorMode: AnchorMode.OnChainOnly,
+    postConditionMode: PostConditionMode.Allow,
+    senderKey: user.secretKey,
+  };
+  return handleContractCall({ txOptions, network });
+}
 
 export async function broadcastDelegateStx({
   amountUstx,
@@ -29,13 +53,13 @@ export async function broadcastDelegateStx({
   amountUstx: number;
   nonce: number;
   network: StacksNetwork;
-  user: {stxAddress:string, secretKey: string};
+  user: { stxAddress: string; secretKey: string };
 }) {
   let txOptions = {
-    contractAddress: poxPoolsSelfServiceContract.address,
-    contractName: poxPoolsSelfServiceContract.name,
-    functionName: poxPoolsSelfServiceContract.Functions.DelegateStx.name,
-    functionArgs: poxPoolsSelfServiceContract.Functions.DelegateStx.args({
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.DelegateStx.name,
+    functionArgs: mainContract.Functions.DelegateStx.args({
       amountUstx: uintCV(amountUstx),
     }),
     nonce,
@@ -54,9 +78,9 @@ export async function broadcastDelegateStackStx({
   nonce,
   network,
 }: {
-  stacker: {stxAddress:string, secretKey: string};
+  stacker: { stxAddress: string; secretKey: string };
   amountUstx: number;
-  user: {stxAddress:string, secretKey: string};
+  user: { stxAddress: string; secretKey: string };
   nonce: number;
   network: StacksNetwork;
 }) {

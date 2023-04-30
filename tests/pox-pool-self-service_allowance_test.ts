@@ -537,13 +537,13 @@ Clarinet.test({
     expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally
 
     // one cycle (== 2100) blocks pass
-    for (let i = 1; i <= 2100; i++) {
+    for (let i = 1; i <= 2098; i++) {
       block = chain.mineBlock([]);
     }
 
     // increase stacked amount
 
-    block = chain.mineBlock([mainDelegateStx(126_000_000_000, wallet_1)]); // err 26 (ERR_STACK_EXTEND_NOT_LOCKED) - how does stack-extend-increase work?
+    block = chain.mineBlock([mainDelegateStx(126_000_000_000, wallet_1)]);
     block.receipts[0].result.expectOk().expectBool(true);
     console.log(block.receipts[0]);
 

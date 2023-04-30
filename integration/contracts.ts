@@ -20,7 +20,7 @@ import {
 
 export namespace mainContract {
   export const address = "ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM";
-  export const name = "pox-pool-self-service";
+  export const name = "main";
 
   // Functions
   export namespace Functions {
@@ -41,12 +41,10 @@ export namespace mainContract {
     export namespace JoinStackingPool {
       export const name = "join-stacking-pool";
 
-      export interface joinStackingPoolArgs {
-        user: PrincipalCV;
-      }
+      export interface joinStackingPoolArgs {}
 
       export function args(args: joinStackingPoolArgs): ClarityValue[] {
-        return [args.user];
+        return [];
       }
     }
 
