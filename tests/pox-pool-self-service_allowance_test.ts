@@ -297,7 +297,7 @@ Clarinet.test({
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "ST000000000000000000002AMW42H.pox-2",
+        "SP000000000000000000002Q6VF78.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address
@@ -306,14 +306,14 @@ Clarinet.test({
 
     console.log("STACKER INFO BEFORE:", block.receipts[0].result);
 
-    for (let i = 1; i <= 2100; i++) {
-      // why only > 4198 works??
+    for (let i = 1; i <= 4196; i++) {
+      // why only > 4195 works??
       block = chain.mineBlock([]);
     }
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "ST000000000000000000002AMW42H.pox-2",
+        "SP000000000000000000002Q6VF78.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address
@@ -537,8 +537,8 @@ Clarinet.test({
     expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally
 
     // one cycle (== 2100) blocks pass
-    for (let i = 1; i <= 2098; i++) {
-      block = chain.mineBlock([]);
+    for (let i = 1; i <= 4198; i++) {
+      block = chain.mineBlock([]); // why 4198??
     }
 
     // increase stacked amount
