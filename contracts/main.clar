@@ -34,24 +34,26 @@
 (define-constant err-stacking-permission-denied (err u609))
 (define-constant err-transfer-failed (err u777))
 (define-constant err-cant-calculate-weights (err u888))
+(define-constant err-pox-address-deactivated (err u999))
 
 (define-constant first-deposit u0)
 (define-constant list-max-len u300)
 (define-constant pool-contract (as-contract tx-sender))
 (define-constant pox-2-contract (as-contract 'SP000000000000000000002Q6VF78.pox-2))
+(define-constant blocks-to-pass-until-reward u101)
+
 ;; data vars
 ;;
 (define-data-var sc-total-balance uint u0)
 (define-data-var sc-delegated-balance uint u0)
 (define-data-var sc-locked-balance uint u0)
-;; (define-map sc-delegated-balance { reward-cycle: uint } { amount-ustx: uint })
-;; (define-map sc-locked-balance { reward-cycle: uint } { amount-ustx:uint })
 (define-data-var sc-owned-balance uint u0)
 (define-data-var sc-reserved-balance uint u0)
 (define-data-var minimum-deposit-amount-liquidity-provider uint u0) ;; minimum amount for the liquidity provider to transfer after deploy
 (define-data-var stackers-list (list 300 principal) (list tx-sender))
 (define-data-var liquidity-provider principal tx-sender)
 (define-data-var reward-cycle-to-calculate-weight uint u0)
+(define-data-var active bool true)
 
 (define-data-var pool-pox-address {hashbytes: (buff 32), version: (buff 1)}
   {
@@ -63,7 +65,7 @@
 ;; data maps
 ;;
 
-(define-map user-data { address: principal } {is-in-pool:bool, delegated-balance: uint, locked-balance:uint, until-block-ht:uint })
+(define-map user-data { address: principal } {is-in-pool:bool, delegated-balance: uint, locked-balance:uint, until-burn-ht: (optional uint) })
 
 (define-map pox-addr-indices uint uint)
 
@@ -77,16 +79,41 @@
 
 (define-map calculated-weights-reward-cycles { reward-cycle: uint } { calculated: bool })
 
-;; (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-block-ht:u0 })
+(define-map burn-block-rewards { burn-height: uint } { reward: uint })
+
+;; (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-burn-ht:u0 })
 (allow-contract-caller (as-contract tx-sender) none)
 
 ;; public functions
 ;;
 
+(define-private (check-won-block-rewards (burn-height uint)) 
+(let ((reward-pox-addr-list (unwrap-panic (get addrs (get-burn-block-info? pox-addrs burn-height))))) 
+  (if 
+    (is-some 
+      (index-of? reward-pox-addr-list (var-get pool-pox-address))) 
+    (begin 
+      (register-block-reward burn-height)
+      true) 
+    false)))
+
+(define-private (register-block-reward (burn-height uint)) 
+(map-set burn-block-rewards {burn-height: burn-height} {reward: (unwrap-panic (get payout (get-burn-block-info? pox-addrs burn-height)))}))
+;;   (if (is-some (index-of? sequence item)) expr-if-true expr-if-false)
+;;  (print (unwrap-panic (get addrs (get-burn-block-info? pox-addrs u2100)))))
+
+(define-public (print-burnchain-header (height uint))
+(ok (print (get-block-info? burnchain-header-hash height))))
+
 (define-public (set-pool-pox-address (new-pool-pox-address {hashbytes: (buff 32), version: (buff 1)})) 
-  (begin 
-    (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
-    (ok (var-set pool-pox-address new-pool-pox-address))))
+(begin 
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+  (ok (var-set pool-pox-address new-pool-pox-address))))
+
+(define-public (set-active (is-active bool))
+(begin
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)    
+  (ok (var-set active is-active))))
 
 (define-public (set-liquidity-provider (new-liquidity-provider principal)) 
   (begin 
@@ -110,7 +137,7 @@
   (asserts! (is-none (map-get? user-data {address: tx-sender})) err-already-in-pool)
   (try! (allow-contract-caller (as-contract tx-sender) none))
   (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
-  (map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-block-ht: u0})
+  (map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-burn-ht: none})
   (ok true)))
 
 (define-public (quit-stacking-pool)
@@ -120,10 +147,11 @@
   (let ((result-revoke
           ;; Calls revoke and ignores result
           (contract-call? 'SP000000000000000000002Q6VF78.pox-2 revoke-delegate-stx)))
-       (try! (disallow-contract-caller pool-contract))
-       (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
-       (map-delete user-data {address: tx-sender})
-       (ok true))))
+
+      (try! (disallow-contract-caller pool-contract))
+      (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
+      (map-delete user-data {address: tx-sender})
+      (ok true))))
 
 (define-private (remove-stacker-stackers-list (address principal)) (not (is-eq tx-sender address)))
 
@@ -381,7 +409,7 @@
                           (get locked-balance (map-get? user-data {address: tx-sender}))) 
                         (unwrap-panic (get locked-balance (map-get? user-data {address: tx-sender}))) 
                         u0) ,
-                      until-block-ht: (if (is-some until-burn-ht) (unwrap-panic until-burn-ht) u0)})
+                      until-burn-ht: until-burn-ht})
                 (print "sc delegated balance")
                 (print (var-get sc-delegated-balance))
                 (ok success))
@@ -390,13 +418,11 @@
 (define-private (lock-delegated-stx (user principal))
   (let ((start-burn-ht (+ burn-block-height u1))
         (pox-address (var-get pool-pox-address))
-        ;; delegate the minimum of the delegated amount and stx balance (including locked stx)
         (buffer-amount u0)
         (user-account (stx-account user))
         (allowed-amount (min (get-delegated-amount user) (+ (get locked user-account) (get unlocked user-account))))
         (amount-ustx (if (> allowed-amount buffer-amount) (- allowed-amount buffer-amount) allowed-amount)))
-    ;; TODO: add this too
-    ;; (asserts! (var-get active) err-pox-address-deactivated)
+    (asserts! (var-get active) err-pox-address-deactivated)
     (match (contract-call? 'SP000000000000000000002Q6VF78.pox-2 delegate-stack-stx
              user amount-ustx
              pox-address start-burn-ht u1)
@@ -419,9 +445,11 @@
                         (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
                         u0), 
                       locked-balance: (get lock-amount stacker-details),
-                      until-block-ht: (+ (* (/ start-burn-ht REWARD_CYCLE_LENGTH) REWARD_CYCLE_LENGTH) (* REWARD_CYCLE_LENGTH u2))})
+                      until-burn-ht: 
+                        (some 
+                          (+ 
+                            (contract-call? .pox-2-fake reward-cycle-to-burn-height (contract-call? .pox-2-fake burn-height-to-reward-cycle start-burn-ht)) REWARD_CYCLE_LENGTH))})
           (increment-sc-locked-balance (get lock-amount stacker-details))
-          ;; TODO: handle sc-locked-balance here
           (ok stacker-details))
 
       error (if (is-eq error 3) ;; check whether user is already stacked
@@ -460,11 +488,16 @@
                           (get locked-balance (map-get? user-data {address: user}))) 
                         (unwrap-panic (get locked-balance (map-get? user-data {address: user})))
                         u0),
-                      until-block-ht: 
+                      until-burn-ht: 
                       (if 
-                        (is-some (get until-block-ht (map-get? user-data {address: user})))
-                        (+ (unwrap-panic (get until-block-ht (map-get? user-data {address: user}))) REWARD_CYCLE_LENGTH)
-                        REWARD_CYCLE_LENGTH)})
+                        (is-some (get until-burn-ht (map-get? user-data {address: user}))) 
+                        (if 
+                          (is-some 
+                            (unwrap-panic (get until-burn-ht (map-get? user-data {address: user}))))
+                          (some (+ (unwrap-panic (unwrap-panic (get until-burn-ht (map-get? user-data {address: user})))) REWARD_CYCLE_LENGTH))
+                          (some REWARD_CYCLE_LENGTH)) 
+                        (some REWARD_CYCLE_LENGTH))
+                      })
               (increment-sc-locked-balance 
                 (if 
                   (is-some 
@@ -499,11 +532,11 @@
                                           (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
                                           u0), 
                                       locked-balance: (get total-locked success-increase),
-                                      until-block-ht: 
+                                      until-burn-ht: 
                                         (if 
-                                          (is-some (get until-block-ht (map-get? user-data {address: user})))
-                                          (unwrap-panic (get until-block-ht (map-get? user-data {address: user})))
-                                          u0)})
+                                          (is-some (get until-burn-ht (map-get? user-data {address: user})))
+                                          (unwrap-panic (get until-burn-ht (map-get? user-data {address: user})))
+                                          none)})
                                     (increment-sc-locked-balance 
                                       (- amount-ustx 
                                         (if (is-some (get locked-balance (map-get? user-data {address: user}))) 
