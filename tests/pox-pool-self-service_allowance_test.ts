@@ -4,6 +4,7 @@ import {
   getStackerInfo,
 } from "./client/pox-2-client.ts";
 import {
+  delegateStackStx,
   delegateStx,
   fpDelegationAllowContractCaller,
   getUserData,
@@ -537,13 +538,13 @@ Clarinet.test({
     expectTotalStackedByCycle(1, 0, 125_000_000_000, chain, deployer); // commits totally
 
     // one cycle (== 2100) blocks pass
-    for (let i = 1; i <= 4198; i++) {
+    for (let i = 1; i <= 4200; i++) {
       block = chain.mineBlock([]); // why 4198??
     }
 
     // increase stacked amount
 
-    block = chain.mineBlock([mainDelegateStx(126_000_000_000, wallet_1)]);
+    block = chain.mineBlock([delegateStx(126_000_000_000, wallet_1)]);
     block.receipts[0].result.expectOk().expectBool(true);
     console.log(block.receipts[0]);
 
