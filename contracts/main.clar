@@ -64,8 +64,6 @@
 ;;
 
 (define-map user-data { address: principal } {is-in-pool:bool, delegated-balance: uint, locked-balance:uint, until-block-ht:uint })
-;; when locking STX, increment locked-balance with min (delegated, STX funds -> STX)
-;; (define-map map-delegated-balance principal uint)
 
 (define-map pox-addr-indices uint uint)
 
@@ -79,8 +77,9 @@
 
 (define-map calculated-weights-reward-cycles { reward-cycle: uint } { calculated: bool })
 
-(map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-block-ht:u0 })
+;; (map-set user-data {address: tx-sender} {is-in-pool:true, delegated-balance:u0, locked-balance:u0, until-block-ht:u0 })
 (allow-contract-caller (as-contract tx-sender) none)
+
 ;; public functions
 ;;
 
@@ -201,11 +200,6 @@
               (decrement-sc-reserved-balance stacker-reward) 
               (ok true))
           error err-transfer-failed)))
-
-;; (define-public (test-weights-calculator (reward-cycle uint))
-;; (begin 
-;;   (var-set reward-cycle-to-calculate-weight reward-cycle)
-;;   (ok (calculate-all-stackers-weights reward-cycle))))
 
 (define-private (calculate-all-stackers-weights (stackers-list-before-cycle (list 300 principal)))
 (begin 
