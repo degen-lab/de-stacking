@@ -29,7 +29,11 @@
 (define-constant err-not-delegated-that-amount (err u396))
 (define-constant err-no-locked-funds (err u456))
 (define-constant err-decrease-forbidden (err u503))
+(define-constant err-no-reward-yet (err u576))
+(define-constant err-not-enough-reserved-balance (err u579))
 (define-constant err-stacking-permission-denied (err u609))
+(define-constant err-transfer-failed (err u777))
+(define-constant err-cant-calculate-weights (err u888))
 
 (define-constant first-deposit u0)
 (define-constant list-max-len u300)
@@ -96,7 +100,7 @@
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
   ;; `TODO: set a minimum deposit amount based on pox info, to make sure future rewards are covered: minimum-deposit-amount-liquidity-provider
   (asserts! (>= amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
-  (try! (as-contract (stx-transfer? amount tx-sender (var-get liquidity-provider))))
+  (try! (stx-transfer? amount tx-sender pool-contract))
   (var-set sc-total-balance (+ amount (var-get sc-total-balance)))
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
   (ok true)))
@@ -146,45 +150,67 @@
     (asserts! (is-eq tx-sender contract-caller) err-stacking-permission-denied)
     (ok (map-delete allowance-contract-callers { sender: tx-sender, contract-caller: caller}))))
 
-;; (define-public (reward-distribution (rewarded-burn-block uint)) 
-;;   (let ((reward-cycle 
-;;           (contract-call? 'SP000000000000000000002Q6VF78.pox-2 burn-height-to-reward-cycle rewarded-burn-block ))) 
-      
-;;       (if 
-;;         (is-some 
-;;           (get calculated (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}))) 
-        ;; (if 
-        ;;   (unwrap-panic 
-        ;;     (get calculated (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}))) 
-        ;;   ;; distribute rewards
-        ;;   (ok true) 
-        ;;   (begin 
-        ;;     (var-set reward-cycle-to-calculate-weight reward-cycle) 
-        ;;     (calculate-all-stackers-weights reward-cycle))) 
-      ;; (begin 
-      ;;   (var-set reward-cycle-to-calculate-weight reward-cycle) 
-      ;;   (calculate-all-stackers-weights reward-cycle)))))
+(define-public (reward-distribution (rewarded-burn-block uint))
+    (let ((reward-cycle 
+            (contract-call? 'SP000000000000000000002Q6VF78.pox-2 burn-height-to-reward-cycle rewarded-burn-block))
+          (last-burn-block-before-reward-cycle 
+            (if 
+              (not (is-eq reward-cycle u0))
+              (- (contract-call? 'SP000000000000000000002Q6VF78.pox-2 reward-cycle-to-burn-height reward-cycle) u1)
+              u0))
+          (stackers-list-at-last-block-before-cycle 
+            (at-block 
+              (unwrap-panic 
+                (get-block-info? 
+                id-header-hash 
+                last-burn-block-before-reward-cycle)) 
+              (var-get stackers-list))))
+              
+              (asserts! (< rewarded-burn-block burn-block-height) err-no-reward-yet)
+              (var-set reward-cycle-to-calculate-weight reward-cycle)
+              (match (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}) 
+                calculated (ok 
+                            (transfer-rewards-all-stackers stackers-list-at-last-block-before-cycle))
+                (begin 
+                  (unwrap! (calculate-all-stackers-weights stackers-list-at-last-block-before-cycle) err-cant-calculate-weights)
+                  (ok 
+                    (transfer-rewards-all-stackers stackers-list-at-last-block-before-cycle))))))
 
-(define-public (test-weights-calculator (reward-cycle uint))
+(define-private (transfer-rewards-all-stackers (stackers-list-before-cycle (list 300 principal)))
+(map transfer-reward-one-stacker stackers-list-before-cycle))
+
+(define-private (transfer-reward-one-stacker (stacker principal)) 
+  (let ((reward u100000) 
+        (stacker-weight 
+          (if 
+            (is-some 
+              (get weight-percentage 
+                (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
+            (unwrap-panic 
+              (get weight-percentage 
+                (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
+            u0))
+        (stacker-reward (/ (* stacker-weight reward) u1000000))) 
+            
+        (match (as-contract (stx-transfer? stacker-reward tx-sender stacker))
+          success 
+            (begin 
+              (asserts! 
+                (check-can-decrement-reserved-balance stacker-reward) 
+              err-not-enough-reserved-balance) 
+              (decrement-sc-reserved-balance stacker-reward) 
+              (ok true))
+          error err-transfer-failed)))
+
+;; (define-public (test-weights-calculator (reward-cycle uint))
+;; (begin 
+;;   (var-set reward-cycle-to-calculate-weight reward-cycle)
+;;   (ok (calculate-all-stackers-weights reward-cycle))))
+
+(define-private (calculate-all-stackers-weights (stackers-list-before-cycle (list 300 principal)))
 (begin 
-  (var-set reward-cycle-to-calculate-weight reward-cycle)
-  (ok (calculate-all-stackers-weights reward-cycle))))
-
-(define-private (calculate-all-stackers-weights (reward-cycle uint))
-(let ((last-burn-block-before-reward-cycle 
-        (if 
-          (not (is-eq reward-cycle u0))
-          (- (contract-call? 'SP000000000000000000002Q6VF78.pox-2 reward-cycle-to-burn-height (var-get reward-cycle-to-calculate-weight)) u1)
-          u0))
-      (stackers-list-at-last-block-before-cycle 
-        (at-block 
-          (unwrap-panic 
-            (get-block-info? 
-            id-header-hash 
-            last-burn-block-before-reward-cycle)) 
-          (var-get stackers-list))))
-    (map calculate-one-stacker-weight stackers-list-at-last-block-before-cycle)
-    (ok true)))
+  (map calculate-one-stacker-weight stackers-list-before-cycle)
+  (ok true)))
 
 (define-private (calculate-one-stacker-weight (stacker principal))
 (let ((last-burn-block-before-reward-cycle 
@@ -242,7 +268,7 @@
 (define-private (weight-calculator (stacker principal) (stacker-locked uint) (total-locked uint) (liquidity-provider-locked uint)) 
 (begin 
   (asserts! (> (+ total-locked liquidity-provider-locked) u0) err-no-locked-funds) 
-  (ok (/ (* stacker-locked u100) (+ total-locked liquidity-provider-locked)))))
+  (ok (/ (* stacker-locked u1000000) (+ total-locked liquidity-provider-locked)))))
 
 
 (define-public (delegate-stx (amount-ustx uint))
@@ -514,6 +540,9 @@
 (define-private (decrement-sc-locked-balance (amount-ustx uint)) 
 (var-set sc-locked-balance (- (var-get sc-locked-balance) amount-ustx)))
 
+(define-private (decrement-sc-reserved-balance (amount-ustx uint)) 
+(var-set sc-reserved-balance (- (var-get sc-reserved-balance) amount-ustx)))
+
 (define-private (check-can-decrement-delegated-balance (amount-ustx uint)) 
 (if 
   (< 
@@ -526,6 +555,14 @@ true))
 (if 
   (< 
     (var-get sc-locked-balance) 
+    amount-ustx) 
+  false
+true))
+
+(define-private (check-can-decrement-reserved-balance (amount-ustx uint)) 
+(if 
+  (< 
+    (var-get sc-reserved-balance) 
     amount-ustx) 
   false
 true))
