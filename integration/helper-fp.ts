@@ -100,3 +100,30 @@ export async function broadcastDelegateStackStx({
   };
   return handleContractCall({ txOptions, network });
 }
+
+export async function broadcastDepositStxOwner({
+  amountUstx,
+  nonce,
+  network,
+  user,
+}: {
+  amountUstx: number;
+  nonce: number;
+  network: StacksNetwork;
+  user: { stxAddress: string; secretKey: string };
+}) {
+  let txOptions = {
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.DepositStxOwner.name,
+    functionArgs: mainContract.Functions.DepositStxOwner.args({
+      amountUstx: uintCV(amountUstx),
+    }),
+    nonce,
+    network,
+    anchorMode: AnchorMode.OnChainOnly,
+    postConditionMode: PostConditionMode.Allow,
+    senderKey: user.secretKey,
+  };
+  return handleContractCall({ txOptions, network });
+}

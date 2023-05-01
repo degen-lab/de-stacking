@@ -38,6 +38,18 @@ export namespace mainContract {
       }
     }
 
+    export namespace DepositStxOwner {
+      export const name = "deposit-stx-SC-owner";
+
+      export interface DepositStxOwnerArgs {
+        amountUstx: UIntCV;
+      }
+
+      export function args(args: DepositStxOwnerArgs): ClarityValue[] {
+        return [args.amountUstx];
+      }
+    }
+
     export namespace JoinStackingPool {
       export const name = "join-stacking-pool";
 

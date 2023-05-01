@@ -6,7 +6,7 @@ import {
   noneCV,
   PostConditionMode,
 } from "@stacks/transactions";
-import { poxPools1CycleContract } from "./contracts";
+import { mainContract, poxPools1CycleContract } from "./contracts";
 import { StacksTestnet } from "@stacks/network";
 
 export async function broadcastAllowContractCallerContracCall({
@@ -23,10 +23,7 @@ export async function broadcastAllowContractCallerContracCall({
     contractName: "pox-2",
     functionName: "allow-contract-caller",
     functionArgs: [
-      contractPrincipalCV(
-        poxPools1CycleContract.address,
-        poxPools1CycleContract.name
-      ),
+      contractPrincipalCV(mainContract.address, poxPools1CycleContract.name),
       noneCV(),
     ],
     network,
