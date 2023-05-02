@@ -7,6 +7,9 @@ cache_dir = '.\.cache'
 
 [[project.requirements]]
 contract_id = 'SP000000000000000000002Q6VF78.pox-2'
+
+[[project.requirements]]
+contract_id = 'ST000000000000000000002AMW42H.pox-2'
 [contracts.main]
 path = 'contracts/main.clar'
 clarity_version = 2

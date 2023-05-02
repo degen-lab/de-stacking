@@ -97,17 +97,19 @@
 ;;
 
 (define-public (update-sc-balances)
-(let ((current-reward-cycle (contract-call? .pox-2-fake burn-height-to-reward-cycle burn-block-height))) 
+(let (
+  (next-reward-cycle (get-next-reward-cycle))
+  (next-reward-cycle-first-block (contract-call? 'ST000000000000000000002AMW42H.pox-2 reward-cycle-to-burn-height (get-next-reward-cycle)))) 
 ;; the update MUST happen during the first half of the current reward cycle's prepare phase
 (begin 
   (asserts! 
     (<= 
       burn-block-height 
       (+ 
-        (contract-call? 'ST000000000000000000002AMW42H.pox-2 reward-cycle-to-burn-height current-reward-cycle) 
-        (/ 
-          PREPARE_CYCLE_LENGTH 
-          u2))) 
+        (- 
+          next-reward-cycle-first-block
+          PREPARE_CYCLE_LENGTH)
+        (/ PREPARE_CYCLE_LENGTH u2))) 
   err-wrong-moment-to-update-balances)
 
   (var-set calc-locked-balance u0)
@@ -115,15 +117,21 @@
   (map update-sc-balances-one-stacker (var-get stackers-list))
   (var-set sc-locked-balance (var-get calc-locked-balance))
   (var-set sc-delegated-balance (var-get calc-delegated-balance))
-  (map-set updated-sc-balances {reward-cycle: current-reward-cycle} {updated: true, stackers-list: (var-get stackers-list)})
-  (var-set reward-cycle-to-calculate-weight current-reward-cycle)
+  (map-set updated-sc-balances {reward-cycle: next-reward-cycle} {updated: true, stackers-list: (var-get stackers-list)})
+  (var-set reward-cycle-to-calculate-weight next-reward-cycle)
   (unwrap! (calculate-all-stackers-weights (var-get stackers-list)) err-cant-calculate-weights)
   (ok true))))
 
-(define-private (update-sc-balances-one-stacker (stacker principal))
+(define-public (update-sc-balances-one-stacker (stacker principal))
 (let ((user-until-burn-ht (get until-burn-ht (map-get? user-data {address: stacker})))
       (user-delegated-balance (get delegated-balance (map-get? user-data {address: stacker})))
       (user-locked-balance (get locked-balance (map-get? user-data {address: stacker})))) 
+
+  (begin 
+  (unwrap! user-until-burn-ht (err u12345))
+  (unwrap! user-delegated-balance (err u123456))
+  (unwrap! user-locked-balance (err u1234567))
+  (ok 
   (if 
     (is-some user-until-burn-ht) 
     (if 
@@ -163,7 +171,7 @@
       (var-set calc-delegated-balance 
         (+ 
           (var-get calc-delegated-balance) 
-          (unwrap-panic user-delegated-balance)))))))
+          (unwrap-panic user-delegated-balance)))))))))
 
 (define-public (multiple-blocks-check-won-rewards (burn-heights-list (list 100 uint))) 
 (ok (map check-won-block-rewards burn-heights-list)))

@@ -23,6 +23,7 @@ import {
   uintCV,
   callReadOnlyFunction,
   cvToJSON,
+  principalCV,
 } from "@stacks/transactions";
 import { Constants } from "./constants";
 
@@ -408,6 +409,40 @@ export const getStackerInfo = async (network: StacksNetwork) => {
   });
   const json = cvToJSON(supplyCall);
   console.log("STACKER INFO JSON:", json);
+
+  return json;
+};
+
+export const getScLockedBalance = async (network: StacksNetwork) => {
+  const supplyCall = await callReadOnlyFunction({
+    contractAddress: Accounts.DEPLOYER.stxAddress,
+    contractName: "main",
+    functionName: "get-SC-locked-balance",
+    functionArgs: [],
+    senderAddress: Accounts.DEPLOYER.stxAddress,
+    network: network,
+  });
+  const json = cvToJSON(supplyCall);
+  console.log("SC Locked Balance:", json);
+
+  return json;
+};
+
+export const getStackerWeight = async (
+  network: StacksNetwork,
+  stacker: string,
+  rewardCycle: number
+) => {
+  const supplyCall = await callReadOnlyFunction({
+    contractAddress: Accounts.DEPLOYER.stxAddress,
+    contractName: "main",
+    functionName: "get-stacker-weight",
+    functionArgs: [principalCV(stacker), uintCV(rewardCycle)],
+    senderAddress: Accounts.DEPLOYER.stxAddress,
+    network: network,
+  });
+  const json = cvToJSON(supplyCall);
+  console.log(`Stacker ${stacker} weight:`, json);
 
   return json;
 };

@@ -60,7 +60,16 @@ export namespace mainContract {
       }
     }
 
-    // delegate-stx
+    export namespace UpdateScBalances {
+      export const name = "update-sc-balances";
+
+      export interface DelegateStxArgs {}
+
+      export function args(args: DelegateStxArgs): ClarityValue[] {
+        return [];
+      }
+    }
+
     export namespace DelegateStx {
       export const name = "delegate-stx";
 
@@ -70,6 +79,18 @@ export namespace mainContract {
 
       export function args(args: DelegateStxArgs): ClarityValue[] {
         return [args.amountUstx];
+      }
+    }
+
+    export namespace RewardDistribution {
+      export const name = "reward-distribution";
+
+      export interface RewardDistributionArgs {
+        burnBlockHeight: UIntCV;
+      }
+
+      export function args(args: RewardDistributionArgs): ClarityValue[] {
+        return [args.burnBlockHeight];
       }
     }
 

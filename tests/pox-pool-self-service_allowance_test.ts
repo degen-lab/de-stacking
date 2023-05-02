@@ -39,6 +39,33 @@ Clarinet.test({
 });
 
 Clarinet.test({
+  name: "Ensure liquidity provider can deposit STX into the SC",
+  async fn(chain: Chain, accounts: Map<string, Account>) {
+    const deployer = accounts.get("deployer")!;
+    const wallet_1 = accounts.get("wallet_1")!;
+
+    // try without any allowance
+    let block = chain.mineBlock([
+      Tx.contractCall(
+        "main",
+        "deposit-stx-SC-owner",
+        [types.uint(10_000_000_000)],
+        deployer.address
+      ),
+    ]);
+
+    // check delegation calls
+    block.receipts[0].result.expectOk().expectBool(true);
+
+    block = chain.mineBlock([
+      Tx.contractCall("main", "get-SC-total-balance", [], deployer.address),
+    ]);
+
+    block.receipts[0].result.expectUint(10_000_000_000);
+  },
+});
+
+Clarinet.test({
   name: "Ensure that user can't join the pool without allowance",
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const wallet_1 = accounts.get("wallet_1")!;
@@ -298,7 +325,7 @@ Clarinet.test({
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "SP000000000000000000002Q6VF78.pox-2",
+        "ST000000000000000000002AMW42H.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address
@@ -314,7 +341,7 @@ Clarinet.test({
 
     block = chain.mineBlock([
       Tx.contractCall(
-        "SP000000000000000000002Q6VF78.pox-2",
+        "ST000000000000000000002AMW42H.pox-2",
         "get-stacker-info",
         [types.principal(wallet_1.address)],
         deployer.address

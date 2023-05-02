@@ -4,6 +4,8 @@ import {
   getAccount,
   getBitcoinBlockHeight,
   getNetworkIdFromEnv,
+  getScLockedBalance,
+  getStackerWeight,
 } from "./helpers";
 import {
   broadcastStackSTX,
@@ -29,7 +31,11 @@ import {
   broadcastDelegateStackStx,
   broadcastDelegateStx,
   broadcastDepositStxOwner,
+  broadcastGetScLockedBalance,
+  broadcastGetStackerWeight,
   broadcastJoinPool,
+  broadcastRewardDistribution,
+  broadcastUpdateScBalances,
 } from "./helper-fp";
 import { expect } from "chai";
 
@@ -46,97 +52,80 @@ describe("testing stacking under epoch 2.1", () => {
     orchestrator.terminate();
   });
 
-  it("allow pool SC in pox-2", async () => {
-    const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
-  });
+  // it("allow pool SC in pox-2", async () => {
+  //   const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
+  // });
 
-  it("delegate after allowing pool SC in pox-2 and joining the pool", async () => {
-    const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
+  // it("delegate after allowing pool SC in pox-2 and joining the pool", async () => {
+  //   const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
 
-    // let chainUpdate = await waitForRewardCycleId(network, orchestrator, 2);
-    // console.log("chain update", chainUpdate.new_blocks[0].block.metadata);
+  //   await orchestrator.waitForStacksBlockAnchoredOnBitcoinBlockOfHeight(
+  //     timeline.pox_2_activation + 1,
+  //     5,
+  //     true
+  //   );
 
-    let poxInfo = await getPoxInfo(network);
-    console.log("PoxInfo, Pre conventional stacking:", poxInfo);
+  //   let chainUpdate = await waitForRewardCycleId(network, orchestrator, 2);
+  //   console.log("chain update", chainUpdate.new_blocks[0].block.metadata);
 
-    await orchestrator.waitForNextStacksBlock();
-    await orchestrator.waitForNextStacksBlock();
-    await orchestrator.waitForNextStacksBlock();
+  //   let poxInfo = await getPoxInfo(network);
+  //   console.log("PoxInfo, Pre conventional stacking:", poxInfo);
 
-    await broadcastAllowContractCallerContracCall({
-      network,
-      nonce: (await getAccount(network, Accounts.WALLET_4.stxAddress)).nonce,
-      senderKey: Accounts.WALLET_4.secretKey,
-    });
+  //   let nonceUpdated = (await getAccount(network, Accounts.WALLET_4.stxAddress))
+  //     .nonce;
 
-    let chainUpdate = await orchestrator.waitForNextStacksBlock();
-    console.log(
-      "** " +
-        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-          .bitcoin_anchor_block_identifier.index
-    );
-    let metadata = chainUpdate.new_blocks[0].block.transactions[1].metadata;
-    expect((metadata as any)["success"]).toBe(true);
-    expect((metadata as any)["result"]).toBe("(ok true)");
+  //   await broadcastAllowContractCallerContracCall({
+  //     network: network,
+  //     nonce: nonceUpdated,
+  //     senderKey: Accounts.WALLET_4.secretKey,
+  //   });
 
-    await broadcastJoinPool({
-      nonce: (await getAccount(network, Accounts.WALLET_4.stxAddress)).nonce,
-      network,
-      user: Accounts.WALLET_4,
-    });
+  //   chainUpdate = await orchestrator.waitForNextStacksBlock();
+  //   let tx = await chainUpdate.new_blocks[0].block.transactions[1];
+  //   console.log("tx Allow Contract Caller", tx);
+  //   let metadata = await chainUpdate.new_blocks[0].block.transactions[1][
+  //     "metadata"
+  //   ];
+  //   expect((metadata as any)["success"]).toBe(true);
+  //   expect((metadata as any)["result"]).toBe("(ok true)");
 
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    metadata = chainUpdate.new_blocks[0].block.transactions[1].metadata;
-    expect((metadata as any)["success"]).toBe(true);
-    expect((metadata as any)["result"]).toBe("(ok true)");
+  //   nonceUpdated = (await getAccount(network, Accounts.WALLET_4.stxAddress))
+  //     .nonce;
 
-    await broadcastDelegateStx({
-      amountUstx: 125_000_000_000,
-      user: Accounts.WALLET_4,
-      nonce: (await getAccount(network, Accounts.WALLET_4.stxAddress)).nonce,
-      network,
-    });
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    metadata = chainUpdate.new_blocks[0].block.transactions[1].metadata;
-    expect((metadata as any)["success"]).toBe(true);
-    expect((metadata as any)["result"]).toBe("(ok true)");
+  //   await broadcastJoinPool({
+  //     nonce: nonceUpdated,
+  //     network,
+  //     user: Accounts.WALLET_4,
+  //   });
 
-    // await waitForRewardCycleId(network, orchestrator, 3);
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // console.log(
-    //   "** " +
-    //     (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-    //       .bitcoin_anchor_block_identifier.index
-    // );
-    // console.log("\n", JSON.stringify(chainUpdate));
+  //   chainUpdate = await orchestrator.waitForNextStacksBlock();
+  //   tx = await chainUpdate.new_blocks[0].block.transactions[1];
+  //   console.log("tx Join Stacking Pool", tx);
+  //   metadata = await chainUpdate.new_blocks[0].block.transactions[1][
+  //     "metadata"
+  //   ];
+  //   expect((metadata as any)["success"]).toBe(true);
+  //   expect((metadata as any)["result"]).toBe("(ok true)");
 
-    // console.log(JSON.stringify(chainUpdate));
+  //   nonceUpdated = (await getAccount(network, Accounts.WALLET_4.stxAddress))
+  //     .nonce;
 
-    // await waitForRewardCycleId(network, orchestrator, 4);
+  //   await broadcastDelegateStx({
+  //     amountUstx: 125_000_000_000_000,
+  //     user: Accounts.WALLET_4,
+  //     nonce: nonceUpdated,
+  //     network,
+  //   });
 
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // console.log(
-    //   "** " +
-    //     (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-    //       .bitcoin_anchor_block_identifier.index
-    // );
-    // console.log(JSON.stringify(chainUpdate));
+  //   chainUpdate = await orchestrator.waitForNextStacksBlock();
+  //   tx = await chainUpdate.new_blocks[0].block.transactions[1];
+  //   console.log("tx Delegate STX", tx);
+  //   metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
+  //   expect((metadata as any)["success"]).toBe(true);
+  //   expect((metadata as any)["result"]).toBe("(ok true)");
 
-    // await broadcastDelegateStackStx({
-    //   amountUstx: 11_000_000_000,
-    //   stacker: Accounts.WALLET_4,
-    //   user: Accounts.DEPLOYER,
-    //   nonce: 3,
-    //   network,
-    // });
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // console.log(
-    //   "** " +
-    //     (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
-    //       .bitcoin_anchor_block_identifier.index
-    // );
-    // console.log(JSON.stringify(chainUpdate));
-  });
+  //   console.log(await getAccount(network, Accounts.WALLET_4.stxAddress));
+  // });
 
   it("whole flow 5 stackers", async () => {
     const network = new StacksTestnet({ url: orchestrator.getStacksNodeUrl() });
@@ -147,62 +136,60 @@ describe("testing stacking under epoch 2.1", () => {
       Accounts.WALLET_2,
       Accounts.WALLET_3,
     ];
-    await orchestrator.waitForNextStacksBlock();
-    await orchestrator.waitForNextStacksBlock();
-    await orchestrator.waitForNextStacksBlock();
 
+    let nonceUpdated = (await getAccount(network, Accounts.DEPLOYER.stxAddress))
+      .nonce;
     await broadcastDepositStxOwner({
-      amountUstx: 10_000_000_000,
-      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
-      network,
+      amountUstx: 11_000_000_000,
+      nonce: nonceUpdated,
+      network: network,
       user: Accounts.DEPLOYER,
     });
     let chainUpdate = await orchestrator.waitForNextStacksBlock();
-    let metadata = chainUpdate.new_blocks[0].block.transactions[1].metadata;
+    let tx = await chainUpdate.new_blocks[0].block.transactions[1];
+    // console.log("tx Deposit STX Owner:", tx);
+    let metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
     expect((metadata as any)["success"]).toBe(true);
     expect((metadata as any)["result"]).toBe("(ok true)");
 
-    for (let i = 0; i < 2; i++) {
-      console.log(i);
-      await broadcastAllowContractCallerContracCall({
-        network,
-        nonce: (await getAccount(network, usersList[i].stxAddress)).nonce,
-        senderKey: usersList[i].secretKey,
-      });
-    }
+    await orchestrator.waitForStacksBlockAnchoredOnBitcoinBlockOfHeight(
+      timeline.pox_2_activation + 1,
+      10,
+      true
+    );
+
+    console.log(await getPoxInfo(network));
+
+    console.log(chainUpdate.new_blocks[0].block.metadata);
+    console.log(
+      "DEPLOYER NONCE:",
+      (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
+      "WALLET_1 NONCE:",
+      (await getAccount(network, Accounts.WALLET_1.stxAddress)).nonce
+    );
+
+    await broadcastAllowContractCallerContracCall({
+      network,
+      nonce: (await getAccount(network, usersList[0].stxAddress)).nonce,
+      senderKey: usersList[0].secretKey,
+    });
+
+    await broadcastAllowContractCallerContracCall({
+      network,
+      nonce: (await getAccount(network, usersList[1].stxAddress)).nonce,
+      senderKey: usersList[1].secretKey,
+    });
+
+    await broadcastAllowContractCallerContracCall({
+      network,
+      nonce: (await getAccount(network, usersList[2].stxAddress)).nonce,
+      senderKey: usersList[2].secretKey,
+    });
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
-    for (let i = 0; i < 2; i++) {
-      console.log(
-        `transaction ${i}:`,
-        chainUpdate.new_blocks[0].block.transactions[1]
-      );
-      metadata = chainUpdate.new_blocks[0].block.transactions[1].metadata;
-      expect((metadata as any)["success"]).toBe(true);
-      expect((metadata as any)["result"]).toBe("(ok true)");
-    }
+    console.log(chainUpdate.new_blocks[0].block.transactions);
 
-    for (let i = 2; i < 4; i++) {
-      console.log(i);
-      await broadcastAllowContractCallerContracCall({
-        network,
-        nonce: (await getAccount(network, usersList[i].stxAddress)).nonce,
-        senderKey: usersList[i].secretKey,
-      });
-    }
-
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    for (let i = 1; i <= 2; i++) {
-      console.log(
-        `transaction ${i}:`,
-        chainUpdate.new_blocks[0].block.transactions[1]
-      );
-      metadata = chainUpdate.new_blocks[0].block.transactions[i].metadata;
-      expect((metadata as any)["success"]).toBe(true);
-      expect((metadata as any)["result"]).toBe("(ok true)");
-    }
-
-    for (let i = 0; i < usersList.length; i++) {
+    for (let i = 0; i < usersList.length - 1; i++) {
       await broadcastJoinPool({
         nonce: (await getAccount(network, usersList[i].stxAddress)).nonce,
         network,
@@ -211,26 +198,126 @@ describe("testing stacking under epoch 2.1", () => {
     }
     chainUpdate = await orchestrator.waitForNextStacksBlock();
 
-    for (let i = 1; i <= usersList.length; i++) {
-      metadata = chainUpdate.new_blocks[0].block.transactions[i].metadata;
+    for (let i = 1; i < usersList.length; i++) {
+      metadata = chainUpdate.new_blocks[0].block.transactions[i]["metadata"];
       expect((metadata as any)["success"]).toBe(true);
       expect((metadata as any)["result"]).toBe("(ok true)");
     }
 
-    for (let i = 0; i < usersList.length; i++) {
-      await broadcastDelegateStx({
-        amountUstx: 125_000_000_000,
-        user: usersList[i],
-        nonce: (await getAccount(network, usersList[i].stxAddress)).nonce,
-        network,
-      });
-    }
+    await broadcastDelegateStx({
+      amountUstx: 125_000_000_000,
+      user: usersList[0],
+      nonce: (await getAccount(network, usersList[0].stxAddress)).nonce,
+      network,
+    });
+
+    await broadcastDelegateStx({
+      amountUstx: 125_000_000_000,
+      user: usersList[1],
+      nonce: (await getAccount(network, usersList[1].stxAddress)).nonce,
+      network,
+    });
+
+    await broadcastDelegateStx({
+      amountUstx: 125_000_000_000,
+      user: usersList[2],
+      nonce: (await getAccount(network, usersList[2].stxAddress)).nonce,
+      network,
+    });
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
-    for (let i = 1; i <= usersList.length; i++) {
-      metadata = chainUpdate.new_blocks[0].block.transactions[i].metadata;
-      expect((metadata as any)["success"]).toBe(true);
-      expect((metadata as any)["result"]).toBe("(ok true)");
-    }
+    console.log("delegations:", chainUpdate.new_blocks[0].block.transactions);
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+
+    console.log(
+      "first user:",
+      await getAccount(network, usersList[0].stxAddress)
+    );
+    console.log(
+      "second user:",
+      await getAccount(network, usersList[1].stxAddress)
+    );
+    console.log(
+      "third user:",
+      await getAccount(network, usersList[2].stxAddress)
+    );
+    console.log(
+      "fourth user:",
+      await getAccount(network, usersList[3].stxAddress)
+    );
+
+    console.log(
+      "** " +
+        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
+          .bitcoin_anchor_block_identifier.index
+    );
+
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+
+    await broadcastUpdateScBalances({
+      user: Accounts.WALLET_1,
+      nonce: (await getAccount(network, Accounts.WALLET_1.stxAddress)).nonce,
+      network,
+    });
+
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+
+    console.log(
+      "update SC balances",
+      chainUpdate.new_blocks[0].block.transactions[1]
+    );
+
+    console.log(
+      "** " +
+        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
+          .bitcoin_anchor_block_identifier.index
+    );
+
+    await getScLockedBalance(network);
+
+    await getStackerWeight(network, Accounts.WALLET_1.stxAddress, 3);
+
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // burn block 135
+    await broadcastRewardDistribution({
+      burnBlockHeight: 130,
+      network,
+      user: Accounts.DEPLOYER,
+      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
+    });
+
+    await broadcastRewardDistribution({
+      burnBlockHeight: 131,
+      network,
+      user: Accounts.WALLET_1,
+      nonce: (await getAccount(network, Accounts.WALLET_1.stxAddress)).nonce,
+    });
+
+    await broadcastRewardDistribution({
+      burnBlockHeight: 132,
+      network,
+      user: Accounts.WALLET_2,
+      nonce: (await getAccount(network, Accounts.WALLET_2.stxAddress)).nonce,
+    });
+
+    await broadcastRewardDistribution({
+      burnBlockHeight: 133,
+      network,
+      user: Accounts.WALLET_8,
+      nonce: (await getAccount(network, Accounts.WALLET_8.stxAddress)).nonce,
+    });
+
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    console.log(chainUpdate.new_blocks[0].block.transactions);
+
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    console.log(chainUpdate.new_blocks[0].block.transactions);
   });
 });

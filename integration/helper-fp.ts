@@ -71,6 +71,56 @@ export async function broadcastDelegateStx({
   return handleContractCall({ txOptions, network });
 }
 
+export async function broadcastUpdateScBalances({
+  nonce,
+  network,
+  user,
+}: {
+  nonce: number;
+  network: StacksNetwork;
+  user: { stxAddress: string; secretKey: string };
+}) {
+  let txOptions = {
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.UpdateScBalances.name,
+    functionArgs: mainContract.Functions.UpdateScBalances.args({}),
+    nonce,
+    network,
+    anchorMode: AnchorMode.OnChainOnly,
+    postConditionMode: PostConditionMode.Allow,
+    senderKey: user.secretKey,
+  };
+  return handleContractCall({ txOptions, network });
+}
+
+export async function broadcastRewardDistribution({
+  burnBlockHeight,
+  nonce,
+  network,
+  user,
+}: {
+  burnBlockHeight: number;
+  nonce: number;
+  network: StacksNetwork;
+  user: { stxAddress: string; secretKey: string };
+}) {
+  let txOptions = {
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.RewardDistribution.name,
+    functionArgs: mainContract.Functions.RewardDistribution.args({
+      burnBlockHeight: uintCV(burnBlockHeight),
+    }),
+    nonce,
+    network,
+    anchorMode: AnchorMode.OnChainOnly,
+    postConditionMode: PostConditionMode.Allow,
+    senderKey: user.secretKey,
+  };
+  return handleContractCall({ txOptions, network });
+}
+
 export async function broadcastDelegateStackStx({
   stacker,
   amountUstx,

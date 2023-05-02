@@ -23,7 +23,7 @@ export async function broadcastAllowContractCallerContracCall({
     contractName: "pox-2",
     functionName: "allow-contract-caller",
     functionArgs: [
-      contractPrincipalCV(mainContract.address, poxPools1CycleContract.name),
+      contractPrincipalCV(mainContract.address, mainContract.name),
       noneCV(),
     ],
     network,
