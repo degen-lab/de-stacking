@@ -41,6 +41,7 @@
 (define-constant err-transfer-failed (err u777))
 (define-constant err-cant-calculate-weights (err u888))
 (define-constant err-no-reward-for-this-block (err u900))
+(define-constant err-already-rewarded-block (err u992))
 (define-constant err-pox-address-deactivated (err u999))
 (define-constant err-weights-not-calculated (err u1000))
 
@@ -49,6 +50,7 @@
 (define-constant pool-contract (as-contract tx-sender))
 (define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-2))
 (define-constant blocks-to-pass-until-reward u101)
+
 
 ;; liquidity provider
 (define-data-var sc-total-balance uint u0)
@@ -69,6 +71,8 @@
 (define-data-var reward-cycle-to-calculate-weight uint u0)
 (define-data-var burn-block-to-distribute-rewards uint u0)
 (define-data-var active bool true)
+(define-data-var blocks-rewarded uint u0)
+(define-data-var amount-rewarded uint u0)
 
 (define-data-var pool-pox-address {hashbytes: (buff 32), version: (buff 1)}
   {
@@ -90,7 +94,7 @@
 (define-map calculated-weights-reward-cycles { reward-cycle: uint } { calculated: bool })
 (define-map burn-block-rewards { burn-height: uint } { reward: uint })
 (define-map updated-sc-balances { reward-cycle: uint } { updated: bool, stackers-list: (list 300 principal) })
-
+(define-map already-rewarded { burn-block-height: uint } { value: bool })
 (allow-contract-caller (as-contract tx-sender) none)
 
 ;; public functions
@@ -272,7 +276,11 @@
         (unwrap-panic (get stackers-list (map-get? updated-sc-balances {reward-cycle: reward-cycle})))))
           (asserts! (< rewarded-burn-block burn-block-height) err-no-reward-yet)
           (asserts! (check-won-block-rewards rewarded-burn-block) err-no-reward-for-this-block)
+          (asserts! (is-some (map-get? already-rewarded {burn-block-height: rewarded-burn-block})) err-already-rewarded-block)
           (var-set burn-block-to-distribute-rewards rewarded-burn-block)
+          (var-set amount-rewarded (+ (var-get amount-rewarded) (unwrap-panic (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))))
+          (var-set blocks-rewarded (+ (var-get blocks-rewarded) u1))
+          (map-set already-rewarded {burn-block-height: rewarded-burn-block} {value: true})
           (match (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}) 
             calculated (ok 
                         (transfer-rewards-all-stackers stackers-list-for-reward-cycle))
