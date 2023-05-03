@@ -74,6 +74,8 @@
 (define-data-var blocks-rewarded uint u0)
 (define-data-var amount-rewarded uint u0)
 
+
+;; liqidity provider reward bitcoin address
 (define-data-var pool-pox-address {hashbytes: (buff 32), version: (buff 1)}
   {
     version: 0x04,
