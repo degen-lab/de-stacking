@@ -190,6 +190,9 @@
       true) 
     false)))
 
+(define-read-only (get-block-rewards (burn-height uint)) 
+(ok (get-burn-block-info? pox-addrs burn-height)))
+
 (define-private (register-block-reward (burn-height uint)) 
 (map-set burn-block-rewards {burn-height: burn-height} {reward: (unwrap-panic (get payout (get-burn-block-info? pox-addrs burn-height)))}))
 

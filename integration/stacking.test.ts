@@ -3,6 +3,7 @@ import {
   DEFAULT_EPOCH_TIMELINE,
   getAccount,
   getBitcoinBlockHeight,
+  getBlockRewards,
   getNetworkIdFromEnv,
   getScLockedBalance,
   getStackerWeight,
@@ -278,14 +279,25 @@ describe("testing stacking under epoch 2.1", () => {
 
     await getStackerWeight(network, Accounts.WALLET_1.stxAddress, 3);
 
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    chainUpdate = await waitForRewardCycleId(network, orchestrator, 14);
+    console.log(
+      "** " +
+        (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
+          .bitcoin_anchor_block_identifier.index
+    );
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
     // burn block 135
+    await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 130);
+    await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 131);
+    await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 132);
+    await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 133);
+
     await broadcastRewardDistribution({
       burnBlockHeight: 130,
       network,

@@ -5,7 +5,7 @@ import GithubActionsReporter from "vitest-github-actions-reporter";
 export default defineConfig({
   test: {
     globals: true,
-    testTimeout: 300_000,
+    testTimeout: 600_000,
     hookTimeout: 150_000,
     teardownTimeout: 15_000,
     reporters: process.env.GITHUB_ACTIONS
