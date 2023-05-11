@@ -39,6 +39,7 @@ import {
   broadcastUpdateScBalances,
 } from "./helper-fp";
 import { expect } from "chai";
+import { uintCV } from "@stacks/transactions";
 
 describe("testing stacking under epoch 2.1", () => {
   let orchestrator: DevnetNetworkOrchestrator;
@@ -147,8 +148,6 @@ describe("testing stacking under epoch 2.1", () => {
       user: Accounts.DEPLOYER,
     });
     let chainUpdate = await orchestrator.waitForNextStacksBlock();
-    let tx = await chainUpdate.new_blocks[0].block.transactions[1];
-    // console.log("tx Deposit STX Owner:", tx);
     let metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
     expect((metadata as any)["success"]).toBe(true);
     expect((metadata as any)["result"]).toBe("(ok true)");
@@ -188,7 +187,17 @@ describe("testing stacking under epoch 2.1", () => {
     });
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
-    console.log(chainUpdate.new_blocks[0].block.transactions);
+
+    for (
+      let i = 1;
+      i < chainUpdate.new_blocks[0].block.transactions.length;
+      i++
+    ) {
+      let metadataAllowI =
+        chainUpdate.new_blocks[0].block.transactions[i]["metadata"];
+      expect((metadataAllowI as any)["success"]).toBe(true);
+      expect((metadataAllowI as any)["result"]).toBe("(ok true)");
+    }
 
     for (let i = 0; i < usersList.length - 1; i++) {
       await broadcastJoinPool({
@@ -228,8 +237,40 @@ describe("testing stacking under epoch 2.1", () => {
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
     console.log("delegations:", chainUpdate.new_blocks[0].block.transactions);
+
+    for (
+      let i = 1;
+      i < chainUpdate.new_blocks[0].block.transactions.length;
+      i++
+    ) {
+      let metadataDelegateI =
+        chainUpdate.new_blocks[0].block.transactions[i]["metadata"];
+      expect((metadataDelegateI as any)["success"]).toBe(true);
+      expect((metadataDelegateI as any)["result"]).toBe("(ok false)");
+    }
+
     chainUpdate = await orchestrator.waitForNextStacksBlock();
+    for (
+      let i = 1;
+      i < chainUpdate.new_blocks[0].block.transactions.length;
+      i++
+    ) {
+      let metadataDelegateI =
+        chainUpdate.new_blocks[0].block.transactions[i]["metadata"];
+      expect((metadataDelegateI as any)["success"]).toBe(true);
+      expect((metadataDelegateI as any)["result"]).toBe("(ok true)");
+    }
     chainUpdate = await orchestrator.waitForNextStacksBlock();
+    for (
+      let i = 1;
+      i < chainUpdate.new_blocks[0].block.transactions.length;
+      i++
+    ) {
+      let metadataDelegateI =
+        chainUpdate.new_blocks[0].block.transactions[i]["metadata"];
+      expect((metadataDelegateI as any)["success"]).toBe(true);
+      expect((metadataDelegateI as any)["result"]).toBe("(ok true)");
+    }
 
     console.log(
       "first user:",
@@ -264,10 +305,10 @@ describe("testing stacking under epoch 2.1", () => {
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
 
-    console.log(
-      "update SC balances",
-      chainUpdate.new_blocks[0].block.transactions[1]
-    );
+    let metadataUpdateBalances =
+      chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
+    expect((metadataUpdateBalances as any)["success"]).toBe(true);
+    expect((metadataUpdateBalances as any)["result"]).toBe("(ok true)");
 
     console.log(
       "** " +
@@ -285,14 +326,7 @@ describe("testing stacking under epoch 2.1", () => {
         (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
           .bitcoin_anchor_block_identifier.index
     );
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // chainUpdate = await orchestrator.waitForNextStacksBlock();
-    // burn block 135
+
     await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 130);
     await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 131);
     await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 132);
