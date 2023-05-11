@@ -127,61 +127,32 @@
   (ok true))))
 
 (define-public (update-sc-balances-one-stacker (stacker principal))
-(let ((user-until-burn-ht (get until-burn-ht (map-get? user-data {address: stacker})))
-      (user-delegated-balance (get delegated-balance (map-get? user-data {address: stacker})))
-      (user-locked-balance (get locked-balance (map-get? user-data {address: stacker})))) 
-
-  (begin 
-  (unwrap! user-until-burn-ht (err u12345))
-  (unwrap! user-delegated-balance (err u123456))
-  (unwrap! user-locked-balance (err u1234567))
+(let ((user-until-burn-ht (default-to u0 (default-to (some u0) (get until-burn-ht (map-get? user-data {address: stacker})))))
+      (user-delegated-balance (default-to u0 (get delegated-balance (map-get? user-data {address: stacker}))))
+      (user-locked-balance (default-to u0 (get locked-balance (map-get? user-data {address: stacker}))))) 
   (ok 
-  (if 
-    (is-some user-until-burn-ht) 
     (if 
-      (is-some 
-        (unwrap-panic 
-          user-until-burn-ht)) 
-      (if 
         (< 
           burn-block-height 
-          (unwrap-panic (unwrap-panic user-until-burn-ht))) 
+          user-until-burn-ht) 
         (begin 
           (var-set calc-locked-balance 
             (+ 
               (var-get calc-locked-balance) 
-              (unwrap-panic user-locked-balance)))
+              user-locked-balance))
           (var-set calc-delegated-balance 
             (+ 
               (var-get calc-delegated-balance) 
-              (unwrap-panic user-delegated-balance)))) 
+              user-delegated-balance))) 
         (begin 
           (var-set calc-locked-balance (var-get calc-locked-balance))
-          (var-set calc-delegated-balance (var-get calc-delegated-balance)))) 
-      (begin 
-        (var-set calc-locked-balance 
-          (+ 
-            (var-get calc-locked-balance) 
-            (unwrap-panic user-locked-balance)))
-        (var-set calc-delegated-balance 
-          (+ 
-            (var-get calc-delegated-balance) 
-            (unwrap-panic user-delegated-balance)))))
-    (begin 
-      (var-set calc-locked-balance 
-        (+ 
-          (var-get calc-locked-balance) 
-          (unwrap-panic user-locked-balance)))
-      (var-set calc-delegated-balance 
-        (+ 
-          (var-get calc-delegated-balance) 
-          (unwrap-panic user-delegated-balance)))))))))
+          (var-set calc-delegated-balance (var-get calc-delegated-balance)))))))
 
 (define-public (multiple-blocks-check-won-rewards (burn-heights-list (list 100 uint))) 
 (ok (map check-won-block-rewards burn-heights-list)))
 
 (define-private (check-won-block-rewards (burn-height uint)) 
-(let ((reward-pox-addr-list (unwrap-panic (get addrs (get-burn-block-info? pox-addrs burn-height))))) 
+(let ((reward-pox-addr-list (default-to (list ) (get addrs (get-burn-block-info? pox-addrs burn-height))))) 
   (if 
     (is-some 
       (index-of? reward-pox-addr-list (var-get pool-pox-address))) 
@@ -194,7 +165,7 @@
 (ok (get-burn-block-info? pox-addrs burn-height)))
 
 (define-private (register-block-reward (burn-height uint)) 
-(map-set burn-block-rewards {burn-height: burn-height} {reward: (unwrap-panic (get payout (get-burn-block-info? pox-addrs burn-height)))}))
+(map-set burn-block-rewards {burn-height: burn-height} {reward: (default-to u0 (get payout (get-burn-block-info? pox-addrs burn-height)))}))
 
 (define-public (print-burnchain-header (height uint))
 (ok (print (get-block-info? burnchain-header-hash height))))
@@ -276,12 +247,12 @@
 (let ((reward-cycle 
         (contract-call? 'ST000000000000000000002AMW42H.pox-2 burn-height-to-reward-cycle rewarded-burn-block))
       (stackers-list-for-reward-cycle 
-        (unwrap-panic (get stackers-list (map-get? updated-sc-balances {reward-cycle: reward-cycle})))))
+        (default-to (list ) (get stackers-list (map-get? updated-sc-balances {reward-cycle: reward-cycle})))))
           (asserts! (< rewarded-burn-block burn-block-height) err-no-reward-yet)
           (asserts! (check-won-block-rewards rewarded-burn-block) err-no-reward-for-this-block)
           (asserts! (is-some (map-get? already-rewarded {burn-block-height: rewarded-burn-block})) err-already-rewarded-block)
           (var-set burn-block-to-distribute-rewards rewarded-burn-block)
-          (var-set amount-rewarded (+ (var-get amount-rewarded) (unwrap-panic (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))))
+          (var-set amount-rewarded (+ (var-get amount-rewarded) (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))))
           (var-set blocks-rewarded (+ (var-get blocks-rewarded) u1))
           (map-set already-rewarded {burn-block-height: rewarded-burn-block} {value: true})
           (match (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}) 
@@ -293,13 +264,13 @@
 (map transfer-reward-one-stacker stackers-list-before-cycle))
 
 (define-private (transfer-reward-one-stacker (stacker principal)) 
-(let ((reward (unwrap-panic (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))) 
+(let ((reward (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))) 
       (stacker-weight 
         (if 
           (is-some 
             (get weight-percentage 
               (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
-          (unwrap-panic 
+          (default-to u0 
             (get weight-percentage 
               (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
           u0))
@@ -328,14 +299,9 @@
       (total-locked-at-reward-cycle 
         (var-get sc-locked-balance))
       (liquidity-provider-locked-at-reward-cycle 
-          (var-get sc-reserved-balance))
+        (var-get sc-reserved-balance))
       (stacker-locked-at-reward-cycle 
-        (if 
-          (is-some 
-            (get locked-balance (map-get? user-data {address: stacker}))) 
-          (unwrap-panic 
-            (get locked-balance (map-get? user-data {address: stacker})))
-          u0)))
+        (default-to u0 (get locked-balance (map-get? user-data {address: stacker})))))
     ;; Save the stacker's weight for a given reward cycle in the map
     (if (is-eq stacker (var-get liquidity-provider)) 
       (map-set stacker-weights-per-reward-cycle 
@@ -419,7 +385,7 @@
       (< burn-block-height expires-at))))
 
 (define-private (is-in-pool) 
-(unwrap! (get is-in-pool (map-get? user-data {address: tx-sender})) false))
+(default-to false (get is-in-pool (map-get? user-data {address: tx-sender}))))
 
 (define-read-only (get-SC-total-balance) 
 (var-get sc-total-balance))
@@ -465,11 +431,7 @@
         ;; Calls revoke and ignores result
         (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx))
       (user-delegated-balance 
-        (if 
-          (is-some 
-            (get delegated-balance (map-get? user-data {address: tx-sender})))
-            (unwrap-panic (get delegated-balance (map-get? user-data {address: tx-sender})))
-            u0)))
+        (default-to u0 (get delegated-balance (map-get? user-data {address: tx-sender})))))
       (if 
           (is-ok result-revoke) 
           (if 
@@ -490,14 +452,9 @@
                 user-data 
                   {address: tx-sender} 
                   {
-                    is-in-pool: (if (is-some (get is-in-pool (map-get? user-data {address: tx-sender}))) (unwrap-panic (get is-in-pool (map-get? user-data {address: tx-sender}))) false),
+                    is-in-pool: (default-to false (get is-in-pool (map-get? user-data {address: tx-sender}))),                    
                     delegated-balance: amount-ustx, 
-                    locked-balance: 
-                    (if 
-                      (is-some 
-                        (get locked-balance (map-get? user-data {address: tx-sender}))) 
-                      (unwrap-panic (get locked-balance (map-get? user-data {address: tx-sender}))) 
-                      u0) ,
+                    locked-balance: (default-to u0 (get locked-balance (map-get? user-data {address: tx-sender}))),
                     until-burn-ht: until-burn-ht})
               (print "sc delegated balance")
               (print (var-get sc-delegated-balance))
@@ -522,17 +479,9 @@
             {address: user} 
             {
               is-in-pool: 
-              (if 
-                (is-some 
-                  (get is-in-pool (map-get? user-data {address: user}))) 
-                (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
-                false),
+                (default-to false (get is-in-pool (map-get? user-data {address: user}))),
               delegated-balance: 
-              (if   
-                (is-some 
-                  (get delegated-balance (map-get? user-data {address: user}))) 
-                (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
-                u0), 
+                (default-to u0 (get delegated-balance (map-get? user-data {address: user}))),
               locked-balance: (get lock-amount stacker-details),
               until-burn-ht: 
                   (some (get unlock-burn-height stacker-details))})
@@ -558,32 +507,13 @@
                     {address: user} 
                     {
                     is-in-pool: 
-                    (if 
-                      (is-some 
-                        (get is-in-pool (map-get? user-data {address: user}))) 
-                      (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
-                      false),
+                      (default-to false (get is-in-pool (map-get? user-data {address: user}))),
                     delegated-balance: 
-                    (if   
-                      (is-some 
-                        (get delegated-balance (map-get? user-data {address: user}))) 
-                      (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
-                      u0), 
+                      (default-to u0 (get delegated-balance (map-get? user-data {address: user}))), 
                     locked-balance: 
-                    (if 
-                      (is-some 
-                        (get locked-balance (map-get? user-data {address: user}))) 
-                      (unwrap-panic (get locked-balance (map-get? user-data {address: user})))
-                      u0),
+                      (default-to u0 (get locked-balance (map-get? user-data {address: user}))),
                     until-burn-ht: 
-                    (if 
-                      (is-some (get until-burn-ht (map-get? user-data {address: user}))) 
-                      (if 
-                        (is-some 
-                          (unwrap-panic (get until-burn-ht (map-get? user-data {address: user}))))
-                        (some (+ (unwrap-panic (unwrap-panic (get until-burn-ht (map-get? user-data {address: user})))) REWARD_CYCLE_LENGTH))
-                        (some REWARD_CYCLE_LENGTH)) 
-                      (some REWARD_CYCLE_LENGTH))
+                      (some (+ (default-to u0 (default-to (some u0) (get until-burn-ht (map-get? user-data {address: user})))) REWARD_CYCLE_LENGTH))
                     })
             (if (> amount-ustx (get locked status))          
               (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-increase 
@@ -591,38 +521,24 @@
                 pox-address 
                 (- 
                   amount-ustx 
-                  (if (is-some (get locked-balance (map-get? user-data {address: user}))) 
-                      (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) 
-                      u0)))
+                  (default-to u0 (get locked-balance (map-get? user-data {address: tx-sender})))))
                 success-increase (begin
                                   (print "success-increase")
                                   (print success-increase)
                                   (map-set user-data 
                                     {address: user} 
                                     {
-                                    is-in-pool: 
-                                      (if 
-                                        (is-some 
-                                          (get is-in-pool (map-get? user-data {address: user}))) 
-                                        (unwrap-panic (get is-in-pool (map-get? user-data {address: user}))) 
-                                        false),
+                                    is-in-pool:
+                                      (default-to false (get is-in-pool (map-get? user-data {address: user}))),
                                     delegated-balance: 
-                                      (if   
-                                        (is-some 
-                                          (get delegated-balance (map-get? user-data {address: user}))) 
-                                        (unwrap-panic (get delegated-balance (map-get? user-data {address: user})))
-                                        u0), 
+                                      (default-to u0 (get delegated-balance (map-get? user-data {address: user}))), 
                                     locked-balance: (get total-locked success-increase),
-                                    until-burn-ht: 
-                                      (if 
-                                        (is-some (get until-burn-ht (map-get? user-data {address: user})))
-                                        (unwrap-panic (get until-burn-ht (map-get? user-data {address: user})))
-                                        none)})
+                                    until-burn-ht:
+                                      (default-to none (get until-burn-ht (map-get? user-data {address: user})))
+                                    })
                                   (increment-sc-locked-balance 
                                     (- amount-ustx 
-                                      (if (is-some (get locked-balance (map-get? user-data {address: user}))) 
-                                      (unwrap-panic (get locked-balance (map-get? user-data {address: user}))) 
-                                      u0)))
+                                      (default-to u0 (get locked-balance (map-get? user-data {address: tx-sender})))))
                                   (ok {lock-amount: (get total-locked success-increase),
                                       stacker: user,
                                       unlock-burn-height: (get unlock-burn-height success)}))
