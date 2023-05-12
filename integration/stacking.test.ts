@@ -7,6 +7,8 @@ import {
   getNetworkIdFromEnv,
   getScLockedBalance,
   getStackerWeight,
+  readRewardCyclePoxAddressForAddress,
+  readRewardCyclePoxAddressListAtIndex,
 } from "./helpers";
 import {
   broadcastStackSTX,
@@ -271,6 +273,30 @@ describe("testing stacking under epoch 2.1", () => {
       expect((metadataDelegateI as any)["success"]).toBe(true);
       expect((metadataDelegateI as any)["result"]).toBe("(ok true)");
     }
+
+    // Friedger check table entry:
+
+    let poxInfo = await getPoxInfo(network);
+    console.log("pox info CURRENT CYCLE:", poxInfo.current_cycle);
+    console.log("pox info NEXT CYCLE:", poxInfo.next_cycle);
+
+    const poxAddrInfo0 = await readRewardCyclePoxAddressForAddress(
+      network,
+      2,
+      Accounts.WALLET_1.stxAddress
+    );
+
+    expect(poxAddrInfo0).toBeNull();
+    console.log("POX ADDRESS INFO WALLET 1", poxAddrInfo0);
+
+    const poxAddrInfo1 = await readRewardCyclePoxAddressListAtIndex(
+      network,
+      3,
+      0
+    );
+
+    expect(poxAddrInfo1?.["total-ustx"]).toEqual(uintCV(375_000_000_000));
+    console.log("POX ADDRESS INFO POOL", poxAddrInfo1);
 
     console.log(
       "first user:",

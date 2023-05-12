@@ -24,6 +24,16 @@ import {
   callReadOnlyFunction,
   cvToJSON,
   principalCV,
+  cvToHex,
+  hexToCV,
+  ClarityType,
+  SomeCV,
+  TupleCV,
+  OptionalCV,
+  PrincipalCV,
+  UIntCV,
+  cvToString,
+  ClarityValue,
 } from "@stacks/transactions";
 import { Constants } from "./constants";
 
@@ -469,15 +479,154 @@ export const getBlockRewards = async (
     `Block ${burnHeight} pox addr 2`,
     json.value.value.value.addrs.value[1] //.value.hashbytes
   );
-  // Object.keys(json.value.value.value.addrs.value).forEach(
-  //   (key) => console.log(`Block ${burnHeight} pox rewards:`,json.value.value.value.addrs.value[key].value.hashbytes)
-  // )
-  // console.log(
-
-  //   // Object.keys(json.value.value.value.addrs.value).forEach(
-  //   //   (key) => json.value.value.value.addrs.value[key].value.hashbytes
-  //   // )
-  // );
 
   return json;
+};
+
+export const readRewardCyclePoxAddressList = async (
+  network: StacksNetwork,
+  cycleId: number
+) => {
+  const url = network.getMapEntryUrl(
+    "ST000000000000000000002AMW42H",
+    "pox-2",
+    "reward-cycle-pox-address-list-len"
+  );
+  const cycleIdValue = uintCV(cycleId);
+  const keyValue = tupleCV({
+    "reward-cycle": cycleIdValue,
+  });
+  const response = await network.fetchFn(url, {
+    method: "POST",
+    body: JSON.stringify(cvToHex(keyValue)),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const msg = await response.text().catch(() => "");
+    throw new Error(
+      `Error calling read-only function. Response ${response.status}: ${response.statusText}. Attempted to fetch ${url} and failed with the message: "${msg}"`
+    );
+  }
+  let lengthJson = await response.json();
+  let lengthSome = hexToCV(lengthJson.data) as OptionalCV<TupleCV>;
+  if (lengthSome.type === ClarityType.OptionalNone) {
+    return null;
+  }
+  let lengthUint = lengthSome.value.data["len"] as UIntCV;
+  let length = Number(lengthUint.value);
+
+  let poxAddrInfoList = [];
+  for (let i = 0; i < length; i++) {
+    let poxAddressInfo = (await readRewardCyclePoxAddressListAtIndex(
+      network,
+      cycleId,
+      i
+    )) as Record<string, ClarityValue>;
+    poxAddrInfoList.push(poxAddressInfo);
+  }
+
+  return poxAddrInfoList;
+};
+
+export const readRewardCyclePoxAddressForAddress = async (
+  network: StacksNetwork,
+  cycleId: number,
+  address: string
+) => {
+  // TODO: There might be a better way to do this using the `stacking-state`
+  //       map to get the index
+  const url = network.getMapEntryUrl(
+    "ST000000000000000000002AMW42H",
+    "pox-2",
+    "reward-cycle-pox-address-list-len"
+  );
+  const cycleIdValue = uintCV(cycleId);
+  const keyValue = tupleCV({
+    "reward-cycle": cycleIdValue,
+  });
+  const response = await network.fetchFn(url, {
+    method: "POST",
+    body: JSON.stringify(cvToHex(keyValue)),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const msg = await response.text().catch(() => "");
+    throw new Error(
+      `Error calling read-only function. Response ${response.status}: ${response.statusText}. Attempted to fetch ${url} and failed with the message: "${msg}"`
+    );
+  }
+  let lengthJson = await response.json();
+  let lengthSome = hexToCV(lengthJson.data) as OptionalCV<TupleCV>;
+  if (lengthSome.type === ClarityType.OptionalNone) {
+    return null;
+  }
+  let lengthUint = lengthSome.value.data["len"] as UIntCV;
+  let length = Number(lengthUint.value);
+
+  for (let i = 0; i < length; i++) {
+    let poxAddressInfo = await readRewardCyclePoxAddressListAtIndex(
+      network,
+      cycleId,
+      i
+    );
+    if (poxAddressInfo?.["stacker"]?.type === ClarityType.OptionalNone) {
+      continue;
+    } else if (poxAddressInfo?.["stacker"]?.type === ClarityType.OptionalSome) {
+      let stackerSome = poxAddressInfo["stacker"] as SomeCV<PrincipalCV>;
+      if (cvToString(stackerSome.value) === address) {
+        return poxAddressInfo;
+      }
+    }
+  }
+
+  return null;
+};
+
+export type RewardCyclePoxAddressMapEntry = {
+  "total-ustx": UIntCV;
+  stacker: OptionalCV<PrincipalCV>;
+};
+
+export const readRewardCyclePoxAddressListAtIndex = async (
+  network: StacksNetwork,
+  cycleId: number,
+  index: number
+): Promise<RewardCyclePoxAddressMapEntry | null | undefined> => {
+  const url = network.getMapEntryUrl(
+    "ST000000000000000000002AMW42H",
+    "pox-2",
+    "reward-cycle-pox-address-list"
+  );
+  const cycleIdValue = uintCV(cycleId);
+  const indexValue = uintCV(index);
+  const keyValue = tupleCV({
+    "reward-cycle": cycleIdValue,
+    index: indexValue,
+  });
+  const response = await network.fetchFn(url, {
+    method: "POST",
+    body: JSON.stringify(cvToHex(keyValue)),
+    headers: {
+      "Content-Type": "application/json",
+    },
+  });
+  if (!response.ok) {
+    const msg = await response.text().catch(() => "");
+    throw new Error(
+      `Error calling read-only function. Response ${response.status}: ${response.statusText}. Attempted to fetch ${url} and failed with the message: "${msg}"`
+    );
+  }
+  let poxAddrInfoJson = await response.json();
+  let cv = hexToCV(poxAddrInfoJson.data);
+  if (cv.type === ClarityType.OptionalSome) {
+    let someCV = cv as SomeCV<TupleCV>;
+    const tupleData = someCV.value.data as RewardCyclePoxAddressMapEntry;
+    return tupleData;
+  } else if (cv.type === ClarityType.OptionalNone) {
+    return null;
+  }
 };
