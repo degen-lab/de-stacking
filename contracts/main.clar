@@ -26,6 +26,7 @@
 (define-constant err-already-in-pool (err u101))
 (define-constant err-not-in-pool (err u102))
 (define-constant err-wrong-moment-to-update-balances (err u123))
+(define-constant err-allow-pool-in-SC-first (err u195))
 (define-constant err-allow-pool-in-pox-2-first (err u199))
 (define-constant err-insufficient-funds (err u200))
 (define-constant err-disallow-pool-in-pox-2-first (err u299))
@@ -99,28 +100,6 @@
 
 ;; Public functions
 
-(define-public (multiple-blocks-check-won-rewards (burn-heights-list (list 100 uint))) 
-(ok (map check-won-block-rewards burn-heights-list)))
-
-(define-public (print-burnchain-header (height uint))
-(ok (print (get-block-info? burnchain-header-hash height))))
-
-(define-public (set-pool-pox-address (new-pool-pox-address {hashbytes: (buff 32), version: (buff 1)})) 
-(begin 
-  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
-  (ok (var-set pool-pox-address new-pool-pox-address))))
-
-(define-public (set-active (is-active bool))
-(begin
-  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)    
-  (ok (var-set active is-active))))
-
-(define-public (set-liquidity-provider (new-liquidity-provider principal)) 
-(begin 
-  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
-  (asserts! (is-some (map-get? user-data {address: new-liquidity-provider})) err-not-in-pool) ;; new liquidity provider should be in pool
-  (ok (var-set liquidity-provider new-liquidity-provider))))
-
 (define-public (deposit-stx-SC-owner (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
@@ -130,28 +109,6 @@
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
   (ok true)))
 
-(define-public (join-stacking-pool)
-(begin
-  (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
-  (asserts! (is-none (map-get? user-data {address: tx-sender})) err-already-in-pool)
-  (try! (allow-contract-caller (as-contract tx-sender) none))
-  (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
-  (map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-burn-ht: none})
-  (ok true)))
-
-(define-public (quit-stacking-pool)
-(begin
-  (asserts! (not (check-pool-SC-pox-2-allowance)) err-disallow-pool-in-pox-2-first)
-  (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
-  (let ((result-revoke
-          ;; calls revoke and ignores result
-          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
-
-      (try! (disallow-contract-caller pool-contract))
-      (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
-      (map-delete user-data {address: tx-sender})
-      (ok true))))
-
 (define-public (reserve-funds-future-rewards (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
@@ -159,6 +116,15 @@
   (asserts! (>= amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
   (var-set sc-owned-balance (- (var-get sc-owned-balance) amount))
   (var-set sc-reserved-balance (+ (var-get sc-reserved-balance) amount))
+  (ok true)))
+
+(define-public (join-stacking-pool)
+(begin
+  (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
+  ;; (asserts! (check-caller-allowed) err-allow-pool-in-SC-first)
+  (asserts! (is-none (map-get? user-data {address: tx-sender})) err-already-in-pool)
+  (var-set stackers-list (unwrap! (as-max-len? (concat (var-get stackers-list) (list tx-sender )) u300) err-full-stacking-pool)) 
+  (map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-burn-ht: none})
   (ok true)))
 
 (define-public (allow-contract-caller (caller principal) (until-burn-ht (optional uint)))
@@ -173,6 +139,19 @@
 (begin
   (asserts! (is-eq tx-sender contract-caller) err-stacking-permission-denied)
   (ok (map-delete allowance-contract-callers { sender: tx-sender, contract-caller: caller}))))
+
+(define-public (quit-stacking-pool)
+(begin
+  (asserts! (not (check-pool-SC-pox-2-allowance)) err-disallow-pool-in-pox-2-first)
+  (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
+  (let ((result-revoke
+          ;; calls revoke and ignores result
+          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
+
+      (try! (disallow-contract-caller pool-contract))
+      (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
+      (map-delete user-data {address: tx-sender})
+      (ok true))))
 
 ;; The SC balances need to be updated during the first half of every Prepare Phase
 ;; Everyone can call the function in order to recalculate each stacker's weight inside the pool
@@ -267,6 +246,27 @@
     (try! (as-contract (lock-delegated-stx user)))
     ;; Do 4.
     (ok (maybe-stack-aggregation-commit current-cycle))))
+
+(define-public (multiple-blocks-check-won-rewards (burn-heights-list (list 100 uint))) 
+(ok (map check-won-block-rewards burn-heights-list)))
+
+;; liquidity provider pool management functions
+
+(define-public (set-pool-pox-address (new-pool-pox-address {hashbytes: (buff 32), version: (buff 1)})) 
+(begin 
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+  (ok (var-set pool-pox-address new-pool-pox-address))))
+
+(define-public (set-active (is-active bool))
+(begin
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)    
+  (ok (var-set active is-active))))
+
+(define-public (set-liquidity-provider (new-liquidity-provider principal)) 
+(begin 
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+  (asserts! (is-some (map-get? user-data {address: new-liquidity-provider})) err-not-in-pool) ;; new liquidity provider should be in pool
+  (ok (var-set liquidity-provider new-liquidity-provider))))
 
 ;; Private functions
 
