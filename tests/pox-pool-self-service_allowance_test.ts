@@ -448,7 +448,7 @@ Clarinet.test({
 });
 
 Clarinet.test({
-  name: "Ensure that user can delegate how much he wants, but it will be locked just when the threshold is met + stack-increase after",
+  name: "Ensure that user can delegate how much he wants, but it will be locked just when the threshold is met",
 
   async fn(chain: Chain, accounts: Map<string, Account>) {
     const mainDelegateStx = (amountUstx: number, user: Account) => {

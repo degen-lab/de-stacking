@@ -3,6 +3,7 @@ import {
   DEFAULT_EPOCH_TIMELINE,
   getAccount,
   getBitcoinBlockHeight,
+  getBlockPoxAddresses,
   getBlockRewards,
   getNetworkIdFromEnv,
   getScLockedBalance,
@@ -154,6 +155,8 @@ describe("testing stacking under epoch 2.1", () => {
     expect((metadata as any)["success"]).toBe(true);
     expect((metadata as any)["result"]).toBe("(ok true)");
 
+    // TODO: Add reserve-funds-future-rewards
+
     await orchestrator.waitForStacksBlockAnchoredOnBitcoinBlockOfHeight(
       timeline.pox_2_activation + 1,
       10,
@@ -230,8 +233,9 @@ describe("testing stacking under epoch 2.1", () => {
       network,
     });
 
+    // modified here to be greater than min_threshold_ustx
     await broadcastDelegateStx({
-      amountUstx: 125_000_000_000,
+      amountUstx: 50_286_942_145_278, // pox activation threshold
       user: usersList[2],
       nonce: (await getAccount(network, usersList[2].stxAddress)).nonce,
       network,
@@ -295,7 +299,7 @@ describe("testing stacking under epoch 2.1", () => {
       0
     );
 
-    expect(poxAddrInfo1?.["total-ustx"]).toEqual(uintCV(375_000_000_000));
+    expect(poxAddrInfo1?.["total-ustx"]).toEqual(uintCV(50_536_942_145_278)); // 375_000_000_000 before
     console.log("POX ADDRESS INFO POOL", poxAddrInfo1);
 
     console.log(
@@ -344,14 +348,22 @@ describe("testing stacking under epoch 2.1", () => {
 
     await getScLockedBalance(network);
 
-    await getStackerWeight(network, Accounts.WALLET_1.stxAddress, 3);
+    await getStackerWeight(network, usersList[0].stxAddress, 3);
+    await getStackerWeight(network, usersList[1].stxAddress, 3);
+    await getStackerWeight(network, usersList[2].stxAddress, 3);
+    await getStackerWeight(network, usersList[3].stxAddress, 3);
 
-    chainUpdate = await waitForRewardCycleId(network, orchestrator, 14);
+    chainUpdate = await waitForRewardCycleId(network, orchestrator, 4);
     console.log(
       "** " +
         (chainUpdate.new_blocks[0].block.metadata as StacksBlockMetadata)
           .bitcoin_anchor_block_identifier.index
     );
+
+    await getBlockPoxAddresses(network, Accounts.DEPLOYER.stxAddress, 130);
+    await getBlockPoxAddresses(network, Accounts.DEPLOYER.stxAddress, 131);
+    await getBlockPoxAddresses(network, Accounts.DEPLOYER.stxAddress, 132);
+    await getBlockPoxAddresses(network, Accounts.DEPLOYER.stxAddress, 133);
 
     await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 130);
     await getBlockRewards(network, Accounts.DEPLOYER.stxAddress, 131);
@@ -391,5 +403,22 @@ describe("testing stacking under epoch 2.1", () => {
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
     console.log(chainUpdate.new_blocks[0].block.transactions);
+
+    console.log(
+      "first user:",
+      await getAccount(network, usersList[0].stxAddress)
+    );
+    console.log(
+      "second user:",
+      await getAccount(network, usersList[1].stxAddress)
+    );
+    console.log(
+      "third user:",
+      await getAccount(network, usersList[2].stxAddress)
+    );
+    console.log(
+      "fourth user:",
+      await getAccount(network, usersList[3].stxAddress)
+    );
   });
 });

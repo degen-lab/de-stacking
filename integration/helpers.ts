@@ -457,7 +457,7 @@ export const getStackerWeight = async (
   return json;
 };
 
-export const getBlockRewards = async (
+export const getBlockPoxAddresses = async (
   network: StacksNetwork,
   stacker: string,
   burnHeight: number
@@ -479,6 +479,25 @@ export const getBlockRewards = async (
     `Block ${burnHeight} pox addr 2`,
     json.value.value.value.addrs.value[1] //.value.hashbytes
   );
+
+  return json;
+};
+
+export const getBlockRewards = async (
+  network: StacksNetwork,
+  stacker: string,
+  burnHeight: number
+) => {
+  const supplyCall = await callReadOnlyFunction({
+    contractAddress: Accounts.DEPLOYER.stxAddress,
+    contractName: "main",
+    functionName: "get-block-rewards",
+    functionArgs: [uintCV(burnHeight)],
+    senderAddress: Accounts.DEPLOYER.stxAddress,
+    network: network,
+  });
+  const json = cvToJSON(supplyCall);
+  console.log(`Block ${burnHeight} rewards`, json.value.value);
 
   return json;
 };

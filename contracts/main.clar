@@ -72,6 +72,7 @@
 (define-data-var liquidity-provider principal tx-sender)
 (define-data-var reward-cycle-to-calculate-weight uint u0)
 (define-data-var burn-block-to-distribute-rewards uint u0)
+(define-data-var reward-cycle-to-distribute-rewards uint u0)
 (define-data-var active bool true)
 (define-data-var blocks-rewarded uint u0)
 (define-data-var amount-rewarded uint u0)
@@ -179,7 +180,7 @@
   (var-set sc-delegated-balance (var-get calc-delegated-balance))
   (map-set updated-sc-balances {reward-cycle: next-reward-cycle} {updated: true, stackers-list: (var-get stackers-list)})
   (var-set reward-cycle-to-calculate-weight next-reward-cycle)
-  (unwrap! (calculate-all-stackers-weights (var-get stackers-list)) err-cant-calculate-weights)
+  (unwrap! (calculate-all-stackers-weights (var-get stackers-list) next-reward-cycle) err-cant-calculate-weights)
   (ok true))))
 
 ;; recalculate balances inside pool
@@ -214,11 +215,12 @@
         (default-to (list ) (get stackers-list (map-get? updated-sc-balances {reward-cycle: reward-cycle})))))
           (asserts! (< rewarded-burn-block burn-block-height) err-no-reward-yet)
           (asserts! (check-won-block-rewards rewarded-burn-block) err-no-reward-for-this-block)
-          (asserts! (is-some (map-get? already-rewarded {burn-block-height: rewarded-burn-block})) err-already-rewarded-block)
+          (asserts! (is-none (map-get? already-rewarded {burn-block-height: rewarded-burn-block})) err-already-rewarded-block)
           (var-set burn-block-to-distribute-rewards rewarded-burn-block)
           (var-set amount-rewarded (+ (var-get amount-rewarded) (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))))
           (var-set blocks-rewarded (+ (var-get blocks-rewarded) u1))
           (map-set already-rewarded {burn-block-height: rewarded-burn-block} {value: true})
+          (var-set reward-cycle-to-distribute-rewards reward-cycle)
           (match (map-get? calculated-weights-reward-cycles {reward-cycle: reward-cycle}) 
             calculated (ok 
                         (transfer-rewards-all-stackers stackers-list-for-reward-cycle))
@@ -421,25 +423,21 @@
 (define-private (transfer-reward-one-stacker (stacker principal)) 
 (let ((reward (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))) 
       (stacker-weight 
-        (if 
-          (is-some 
-            (get weight-percentage 
-              (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
-          (default-to u0 
-            (get weight-percentage 
-              (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)})))
-          u0))
+        (default-to u0 
+          (get weight-percentage 
+            (map-get? stacker-weights-per-reward-cycle {stacker: stacker, reward-cycle: (var-get reward-cycle-to-distribute-rewards)}))))
       (stacker-reward (/ (* stacker-weight reward) u1000000))) 
-          
-      (match (as-contract (stx-transfer? stacker-reward tx-sender stacker))
-        success 
-          (begin 
-            (if 
-              (not (check-can-decrement-reserved-balance stacker-reward))
-              (decrement-sc-owned-balance stacker-reward)
-              (decrement-sc-reserved-balance stacker-reward)) 
-            (ok true))
-        error err-transfer-failed)))
+      (if (> stacker-weight u0) 
+          (match (as-contract (stx-transfer? stacker-reward tx-sender stacker))
+            success 
+              (begin 
+                (if 
+                  (not (check-can-decrement-reserved-balance stacker-reward))
+                  (decrement-sc-owned-balance stacker-reward)
+                  (decrement-sc-reserved-balance stacker-reward)) 
+                (ok true))
+            error (err error)) 
+          (ok false))))
 
 ;; Weight calculation functions
 
@@ -449,9 +447,10 @@
   (asserts! (> (+ total-locked liquidity-provider-locked) u0) err-no-locked-funds) 
   (ok (/ (* stacker-locked u1000000) (+ total-locked liquidity-provider-locked)))))
 
-(define-private (calculate-all-stackers-weights (stackers-list-before-cycle (list 300 principal)))
+(define-private (calculate-all-stackers-weights (stackers-list-before-cycle (list 300 principal)) (next-reward-cycle uint))
 (begin 
   (map calculate-one-stacker-weight stackers-list-before-cycle)
+  (map-set calculated-weights-reward-cycles {reward-cycle: next-reward-cycle} {calculated: true})
   (ok true)))
 
 ;; each stacker will have a weight inside the pool which will be used when distributing rewards
