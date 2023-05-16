@@ -52,7 +52,6 @@
 (define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-2))
 (define-constant blocks-to-pass-until-reward u101)
 
-
 ;; liquidity provider data vars
 (define-data-var sc-total-balance uint u0)
 (define-data-var sc-owned-balance uint u0)
@@ -421,7 +420,7 @@
 (map transfer-reward-one-stacker stackers-list-before-cycle))
 
 (define-private (transfer-reward-one-stacker (stacker principal)) 
-(let ((reward (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))) 
+(let ((reward (* u426 (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)}))))) ;; TODO: replace with alexGo 
       (stacker-weight 
         (default-to u0 
           (get weight-percentage 
@@ -478,18 +477,19 @@
             total-locked-at-reward-cycle 
             liquidity-provider-reserved-at-reward-cycle)
           (weight-calculator 
-                stacker 
-                stacker-locked-at-reward-cycle 
-                total-locked-at-reward-cycle 
-                liquidity-provider-reserved-at-reward-cycle))))
+            stacker 
+            stacker-locked-at-reward-cycle 
+            total-locked-at-reward-cycle 
+            liquidity-provider-reserved-at-reward-cycle))))
     ;; register the stacker's weight for a given reward cycle using a map
     (map-set stacker-weights-per-reward-cycle 
       {stacker: stacker, reward-cycle: (var-get reward-cycle-to-calculate-weight)} 
       {weight-percentage: 
         (if 
           (not (is-err weight-calculator-result)) 
-          (unwrap-panic weight-calculator-result ) 
-          u0)})))
+          (unwrap-panic weight-calculator-result) 
+          u0)
+      })))
 
 
 ;; check if pool pox address has won the rewards for a given burn height and store the reward if true

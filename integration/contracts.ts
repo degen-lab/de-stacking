@@ -50,6 +50,18 @@ export namespace mainContract {
       }
     }
 
+    export namespace ReserveFundsLiqProvider {
+      export const name = "reserve-funds-future-rewards";
+
+      export interface ReserveFundsLiqProviderArgs {
+        amountUstx: UIntCV;
+      }
+
+      export function args(args: ReserveFundsLiqProviderArgs): ClarityValue[] {
+        return [args.amountUstx];
+      }
+    }
+
     export namespace JoinStackingPool {
       export const name = "join-stacking-pool";
 

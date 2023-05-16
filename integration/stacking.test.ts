@@ -6,6 +6,7 @@ import {
   getBlockPoxAddresses,
   getBlockRewards,
   getNetworkIdFromEnv,
+  getPoolMembers,
   getScLockedBalance,
   getStackerWeight,
   readRewardCyclePoxAddressForAddress,
@@ -38,6 +39,7 @@ import {
   broadcastGetScLockedBalance,
   broadcastGetStackerWeight,
   broadcastJoinPool,
+  broadcastReserveStxOwner,
   broadcastRewardDistribution,
   broadcastUpdateScBalances,
 } from "./helper-fp";
@@ -152,6 +154,17 @@ describe("testing stacking under epoch 2.1", () => {
     });
     let chainUpdate = await orchestrator.waitForNextStacksBlock();
     let metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
+    expect((metadata as any)["success"]).toBe(true);
+    expect((metadata as any)["result"]).toBe("(ok true)");
+
+    await broadcastReserveStxOwner({
+      amountUstx: 11_000_000_000,
+      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
+      network: network,
+      user: Accounts.DEPLOYER,
+    });
+    chainUpdate = await orchestrator.waitForNextStacksBlock();
+    metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
     expect((metadata as any)["success"]).toBe(true);
     expect((metadata as any)["result"]).toBe("(ok true)");
 
@@ -287,7 +300,7 @@ describe("testing stacking under epoch 2.1", () => {
     const poxAddrInfo0 = await readRewardCyclePoxAddressForAddress(
       network,
       2,
-      Accounts.WALLET_1.stxAddress
+      Accounts.DEPLOYER.stxAddress
     );
 
     expect(poxAddrInfo0).toBeNull();
@@ -327,9 +340,11 @@ describe("testing stacking under epoch 2.1", () => {
 
     chainUpdate = await orchestrator.waitForNextStacksBlock();
 
+    getPoolMembers(network);
+
     await broadcastUpdateScBalances({
-      user: Accounts.WALLET_1,
-      nonce: (await getAccount(network, Accounts.WALLET_1.stxAddress)).nonce,
+      user: Accounts.DEPLOYER,
+      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
       network,
     });
 

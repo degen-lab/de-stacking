@@ -177,3 +177,30 @@ export async function broadcastDepositStxOwner({
   };
   return handleContractCall({ txOptions, network });
 }
+
+export async function broadcastReserveStxOwner({
+  amountUstx,
+  nonce,
+  network,
+  user,
+}: {
+  amountUstx: number;
+  nonce: number;
+  network: StacksNetwork;
+  user: { stxAddress: string; secretKey: string };
+}) {
+  let txOptions = {
+    contractAddress: mainContract.address,
+    contractName: mainContract.name,
+    functionName: mainContract.Functions.ReserveFundsLiqProvider.name,
+    functionArgs: mainContract.Functions.ReserveFundsLiqProvider.args({
+      amountUstx: uintCV(amountUstx),
+    }),
+    nonce,
+    network,
+    anchorMode: AnchorMode.OnChainOnly,
+    postConditionMode: PostConditionMode.Allow,
+    senderKey: user.secretKey,
+  };
+  return handleContractCall({ txOptions, network });
+}

@@ -502,6 +502,21 @@ export const getBlockRewards = async (
   return json;
 };
 
+export const getPoolMembers = async (network: StacksNetwork) => {
+  const supplyCall = await callReadOnlyFunction({
+    contractAddress: Accounts.DEPLOYER.stxAddress,
+    contractName: "main",
+    functionName: "get-pool-members",
+    functionArgs: [],
+    senderAddress: Accounts.DEPLOYER.stxAddress,
+    network: network,
+  });
+  const json = cvToJSON(supplyCall);
+  console.log(`Stackers list:`, json);
+
+  return json;
+};
+
 export const readRewardCyclePoxAddressList = async (
   network: StacksNetwork,
   cycleId: number
