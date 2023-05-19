@@ -284,47 +284,51 @@
 
 
 
-;; exhchange utilities
-(use-trait ft-trait 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.trait-sip-010.sip-010-trait)
+;; EXCHANGE UTILITIES WORKING ON MAINNET 10k sats approx = 3588919.92 uSTX = 3.5... STX
 
-(define-constant ONE_8 u100000000)
+;; (use-trait ft-trait 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.trait-sip-010.sip-010-trait)
 
-(define-private (to-one-8 (a uint))
-  (* a ONE_8))
+;; (define-constant ONE_8 u100000000)
 
-(define-private (mul-down (a uint) (b uint))
-  (/ (* a b) ONE_8))
+;; (define-private (to-one-8 (a uint))
+;;   (* a ONE_8))
 
-(define-private (div-down (a uint) (b uint))
-  (if (is-eq a u0)
-    u0
-    (/ (* a ONE_8) b)))
+;; (define-private (mul-down (a uint) (b uint))
+;;   (/ (* a b) ONE_8))
 
-(define-private (minus-percent (a uint) (percent uint))
-  (if (is-eq a u0)
-    u0
-    (/ (- (* a u100) (* a percent)) u100)))
+;; (define-private (div-down (a uint) (b uint))
+;;   (if (is-eq a u0)
+;;     u0
+;;     (/ (* a ONE_8) b)))
 
-;; public to check return btc-to-stx amount
-;; input: 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wbtc 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wstx 5000
-(define-public (swap-stx-to-xbtc (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (btc-amount uint)) 
-  (let (
-    (stx-formatted-amount (to-one-8 stx-amount))
-    (token-x (contract-of token-x-trait))
-    (token-y (contract-of token-y-trait))
-    (fee-amount 
-      (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.swap-helper-v1-03 fee-helper token-x token-y))
-    (stx-amount 
-      (mul-down 
-        (unwrap-panic (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.swap-helper-v1-03 get-helper token-x token-y stx-formatted-amount)) 
-        (- ONE_8 (unwrap-panic fee-amount))))
-    (ok stx-amount))))
+;; (define-private (minus-percent (a uint) (percent uint))
+;;   (if (is-eq a u0)
+;;     u0
+;;     (/ (- (* a u100) (* a percent)) u100)))
+
+;; ;; public to check return btc-to-stx amount
+;; ;; input: 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wbtc 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wstx 5000
+;; (define-public (swap-stx-to-xbtc (token-x-trait <ft-trait>) (token-y-trait <ft-trait>) (sats-amount uint)) 
+;;   (let (
+;;     ;; (btc-formatted-amount (to-one-8 sats-amount))
+;;     (token-x (contract-of token-x-trait))
+;;     (token-y (contract-of token-y-trait))
+;;     (fee-amount 
+;;       (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.amm-swap-pool-v1-1 fee-helper token-x token-y ONE_8))
+;;     (stx-amount 
+;;       (mul-down 
+;;         (unwrap-panic (contract-call? 'SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.amm-swap-pool-v1-1 get-helper token-x token-y ONE_8 sats-amount)) 
+;;         (- ONE_8 (unwrap-panic fee-amount)))))
+;;     (ok stx-amount)))
 
 (define-private (transfer-rewards-all-stackers (stackers-list-before-cycle (list 300 principal)))
 (map transfer-reward-one-stacker stackers-list-before-cycle))
 
 (define-private (transfer-reward-one-stacker (stacker principal)) 
-(let ((reward (unwrap-panic (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))) 
+(let ((reward 
+        (* 
+          u359 ;; simulating auto exchange
+          (unwrap-panic (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)})))))
       (stacker-weight 
         (if 
           (is-some 
