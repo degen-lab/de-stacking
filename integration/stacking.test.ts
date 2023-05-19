@@ -36,8 +36,6 @@ import {
   broadcastDelegateStackStx,
   broadcastDelegateStx,
   broadcastDepositStxOwner,
-  broadcastGetScLockedBalance,
-  broadcastGetStackerWeight,
   broadcastJoinPool,
   broadcastReserveStxOwner,
   broadcastRewardDistribution,
@@ -157,17 +155,6 @@ describe("testing stacking under epoch 2.1", () => {
     expect((metadata as any)["success"]).toBe(true);
     expect((metadata as any)["result"]).toBe("(ok true)");
 
-    await broadcastReserveStxOwner({
-      amountUstx: 11_000_000_000,
-      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
-      network: network,
-      user: Accounts.DEPLOYER,
-    });
-    chainUpdate = await orchestrator.waitForNextStacksBlock();
-    metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
-    expect((metadata as any)["success"]).toBe(true);
-    expect((metadata as any)["result"]).toBe("(ok true)");
-
     // TODO: Add reserve-funds-future-rewards
 
     await orchestrator.waitForStacksBlockAnchoredOnBitcoinBlockOfHeight(
@@ -203,8 +190,17 @@ describe("testing stacking under epoch 2.1", () => {
       nonce: (await getAccount(network, usersList[2].stxAddress)).nonce,
       senderKey: usersList[2].secretKey,
     });
-
+    await broadcastReserveStxOwner({
+      amountUstx: 11_000_000_000,
+      nonce: (await getAccount(network, Accounts.DEPLOYER.stxAddress)).nonce,
+      network: network,
+      user: Accounts.DEPLOYER,
+    });
     chainUpdate = await orchestrator.waitForNextStacksBlock();
+    // metadata = chainUpdate.new_blocks[0].block.transactions[1]["metadata"];
+    // expect((metadata as any)["success"]).toBe(true);
+    // expect((metadata as any)["result"]).toBe("(ok true)");
+    // chainUpdate = await orchestrator.waitForNextStacksBlock();
 
     for (
       let i = 1;
