@@ -1115,7 +1115,7 @@
      ;; must be called with positive `increase-by`
      (asserts! (>= increase-by u1)
                (err ERR_STACKING_INVALID_AMOUNT))
-
+     (print increase-by)
      (let ((unlock-in-cycle (burn-height-to-reward-cycle unlock-height))
            (cur-cycle (current-pox-reward-cycle))
            (first-increase-cycle (+ cur-cycle u1))

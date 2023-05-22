@@ -452,9 +452,12 @@ export const getStackerWeight = async (
     network: network,
   });
   const json = cvToJSON(supplyCall);
-  console.log(`Stacker ${stacker} weight:`, json);
+  console.log(
+    `Stacker ${stacker} weight:`,
+    json.value ? json.value.value : json
+  );
 
-  return json;
+  return json.value ? json.value.value : json;
 };
 
 export const getBlockPoxAddresses = async (
@@ -513,6 +516,24 @@ export const getPoolMembers = async (network: StacksNetwork) => {
   });
   const json = cvToJSON(supplyCall);
   console.log(`Stackers list:`, json);
+
+  return json;
+};
+
+export const getCheckDelegation = async (
+  network: StacksNetwork,
+  stacker: string
+) => {
+  const supplyCall = await callReadOnlyFunction({
+    contractAddress: "ST000000000000000000002AMW42H",
+    contractName: "pox-2",
+    functionName: "get-check-delegation",
+    functionArgs: [principalCV(stacker)],
+    senderAddress: Accounts.DEPLOYER.stxAddress,
+    network: network,
+  });
+  const json = cvToJSON(supplyCall);
+  console.log(`Stacker delegation info:`, json.value.value);
 
   return json;
 };
