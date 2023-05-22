@@ -4,3 +4,5 @@
 .cache/**
 history.txt
 node_modules
+**\.cache
+.DS_Store
