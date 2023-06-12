@@ -32,6 +32,7 @@
 (define-constant err-insufficient-funds (err u200))
 (define-constant err-disallow-pool-in-pox-2-first (err u299))
 (define-constant err-full-stacking-pool (err u300))
+(define-constant err-same-value (err u325))
 (define-constant err-future-reward-not-covered (err u333))
 (define-constant err-not-delegated-that-amount (err u396))
 (define-constant err-no-locked-funds (err u456))
@@ -44,6 +45,8 @@
 (define-constant err-cant-calculate-weights (err u888))
 (define-constant err-no-reward-for-this-block (err u900))
 (define-constant err-already-rewarded-block (err u992))
+(define-constant err-cant-withdraw-now (err u995))
+(define-constant err-return-div-exceeds-maximum (err u997))
 (define-constant err-pox-address-deactivated (err u999))
 (define-constant err-weights-not-calculated (err u1000))
 
@@ -52,12 +55,14 @@
 (define-constant pool-contract (as-contract tx-sender))
 (define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-2))
 (define-constant blocks-to-pass-until-reward u101)
-
+(define-constant max-return-div-accepted u20)
 ;; liquidity provider data vars
 (define-data-var sc-total-balance uint u0)
 (define-data-var sc-owned-balance uint u0)
 (define-data-var sc-reserved-balance uint u0)
-
+  ;; (the percentage of the locked balance assured by the liquidity provider) ^ -1,
+  ;; return-div = u20 => the liquidity provider is ready to grant a maximum of 5% of the total locked balance.
+(define-data-var return-div uint u20)  
 ;; stackers data vars
 (define-data-var sc-delegated-balance uint u0)
 (define-data-var sc-locked-balance uint u0)
@@ -103,13 +108,28 @@
 
 ;; Public functions
 
-(define-public (deposit-stx-SC-owner (amount uint)) 
+(define-public (deposit-stx-liquidity-provider (amount uint)) 
 (begin 
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
   (asserts! (>= amount (var-get minimum-deposit-amount-liquidity-provider)) err-future-reward-not-covered)
   (try! (stx-transfer? amount tx-sender pool-contract))
   (var-set sc-total-balance (+ amount (var-get sc-total-balance)))
   (var-set sc-owned-balance (+ amount (var-get sc-owned-balance)))
+  (ok true)))
+
+(define-public (withdraw-stx-liquidity-provider (amount uint)) 
+(begin 
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
+  (asserts! 
+    (and 
+      (check-can-decrement-owned-balance amount) 
+      (check-can-decrement-total-balance amount)) 
+  err-insufficient-funds)
+  (try! 
+    (as-contract 
+      (stx-transfer? amount tx-sender (var-get liquidity-provider))))
+  (var-set sc-total-balance (- (var-get sc-total-balance) amount))
+  (var-set sc-owned-balance (- (var-get sc-owned-balance) amount))
   (ok true)))
 
 (define-public (reserve-funds-future-rewards (amount uint)) 
@@ -120,6 +140,27 @@
   (var-set sc-owned-balance (- (var-get sc-owned-balance) amount))
   (var-set sc-reserved-balance (+ (var-get sc-reserved-balance) amount))
   (ok true)))
+
+(define-public (unreserve-extra-reserved-funds) 
+(begin 
+  (asserts! 
+    (is-eq 
+      tx-sender 
+      (var-get liquidity-provider)) 
+  err-only-liquidity-provider)
+  (asserts! (can-withdraw-extra-reserved-now) err-cant-withdraw-now)
+    (let ((unreserve-amount (calculate-extra-reserved-funds))
+          (reserved-balance-before (var-get sc-reserved-balance))
+          (owned-balance-before (var-get sc-owned-balance))) 
+      (var-set sc-reserved-balance 
+        (- 
+          reserved-balance-before 
+          unreserve-amount))
+      (var-set sc-owned-balance 
+        (+ 
+          owned-balance-before 
+          unreserve-amount))
+      (ok unreserve-amount))))
 
 (define-public (join-stacking-pool)
 (begin
@@ -272,6 +313,14 @@
   (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider)
   (asserts! (is-some (map-get? user-data {address: new-liquidity-provider})) err-not-in-pool) ;; new liquidity provider should be in pool
   (ok (var-set liquidity-provider new-liquidity-provider))))
+
+(define-public (update-return (new-return-value uint)) 
+(begin 
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-only-liquidity-provider) 
+  (asserts! (<= new-return-value max-return-div-accepted) err-return-div-exceeds-maximum)
+  (asserts! (not (is-eq new-return-value (var-get return-div))) err-same-value)
+  (var-set return-div new-return-value)
+  (ok new-return-value)))
 
 ;; Private functions
 
@@ -555,6 +604,22 @@ true))
   false
 true))
 
+(define-private (check-can-decrement-total-balance (amount-ustx uint)) 
+(if 
+  (< 
+    (var-get sc-total-balance) 
+    amount-ustx) 
+  false
+true))
+
+(define-private (check-can-decrement-owned-balance (amount-ustx uint)) 
+(if 
+  (< 
+    (var-get sc-owned-balance) 
+    amount-ustx) 
+  false
+true))
+
 (define-private (min (amount-1 uint) (amount-2 uint))
   (if (< amount-1 amount-2)
     amount-1
@@ -593,6 +658,9 @@ true))
 
 (define-read-only (get-SC-total-balance) 
 (var-get sc-total-balance))
+
+(define-read-only (get-SC-owned-balance) 
+(var-get sc-owned-balance))
 
 (define-read-only (get-SC-locked-balance)
 (var-get sc-locked-balance))
@@ -642,3 +710,22 @@ true))
   (if (check-is-stacker address)
     (ok "is-stacker")
     (ok "is-none"))))
+
+(define-read-only (calculate-extra-reserved-funds) 
+;; subtract the potential return from the total reserved balance and get the extra reserved balance
+(- 
+  (var-get sc-reserved-balance) 
+    (/ 
+      (var-get sc-locked-balance) 
+      (var-get return-div))))
+
+(define-read-only (can-withdraw-extra-reserved-now) 
+;; liquidity provider can only withdraw extra reserved balance within the last 10 blocks of a reward cycle
+(let ((mod-burn-height (mod burn-block-height REWARD_CYCLE_LENGTH))
+      (start-value (- REWARD_CYCLE_LENGTH u10))
+      (end-value (- REWARD_CYCLE_LENGTH u1))) 
+  (and (>= mod-burn-height start-value) (<= mod-burn-height end-value))))
+
+
+(define-read-only (get-return) 
+(var-get return-div))
