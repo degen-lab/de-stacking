@@ -25,6 +25,7 @@
 (define-constant err-only-liquidity-provider (err u100))
 (define-constant err-already-in-pool (err u101))
 (define-constant err-not-in-pool (err u102))
+(define-constant err-liquidity-provider-not-permitted (err u103))
 (define-constant err-wrong-moment-to-update-balances (err u123))
 (define-constant err-allow-pool-in-SC-first (err u195))
 (define-constant err-allow-pool-in-pox-2-first (err u199))
@@ -98,6 +99,8 @@
 (define-map already-rewarded { burn-block-height: uint } { value: bool })
 (allow-contract-caller (as-contract tx-sender) none)
 
+(map-set user-data {address: tx-sender} {is-in-pool: true, delegated-balance: u0, locked-balance: u0, until-burn-ht: none})
+
 ;; Public functions
 
 (define-public (deposit-stx-SC-owner (amount uint)) 
@@ -144,6 +147,7 @@
 (begin
   (asserts! (not (check-pool-SC-pox-2-allowance)) err-disallow-pool-in-pox-2-first)
   (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
+  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-liquidity-provider-not-permitted)
   (let ((result-revoke
           ;; calls revoke and ignores result
           (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
@@ -613,3 +617,28 @@ true))
 
 (define-read-only (get-delegated-amount (user principal))
 (default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-delegation-info user))))
+
+(define-read-only (get-liquidity-provider) 
+(var-get liquidity-provider))
+
+(define-read-only (get-amount-rewarded) 
+(var-get amount-rewarded))
+
+(define-read-only (get-blocks-rewarded) 
+(var-get blocks-rewarded))
+
+(define-read-only (get-stacked-this-cycle) 
+(var-get sc-locked-balance))
+
+(define-private (check-is-liquidity-provider (address principal)) 
+(is-eq address (var-get liquidity-provider)))
+
+(define-private (check-is-stacker (address principal)) 
+(default-to false (get is-in-pool (map-get? user-data {address: address}))))
+
+(define-read-only (get-address-status (address principal))
+(if (check-is-liquidity-provider address)  
+  (ok "is-provider")
+  (if (check-is-stacker address)
+    (ok "is-stacker")
+    (ok "is-none"))))
