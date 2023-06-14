@@ -70,14 +70,14 @@
 ;; temporary data var helpers
 (define-data-var calc-delegated-balance uint u0)
 (define-data-var calc-locked-balance uint u0)
-
-;; common data vars
-(define-data-var minimum-deposit-amount-liquidity-provider uint u10000000000) ;; minimum amount for the liquidity provider to transfer after deploy
-(define-data-var stackers-list (list 300 principal) (list tx-sender))
-(define-data-var liquidity-provider principal tx-sender)
 (define-data-var reward-cycle-to-calculate-weight uint u0)
 (define-data-var burn-block-to-distribute-rewards uint u0)
 (define-data-var reward-cycle-to-distribute-rewards uint u0)
+
+;; common data vars
+(define-data-var minimum-deposit-amount-liquidity-provider uint u10000000000) ;; minimum amount for the liquidity provider to transfer after deploy in microSTX (STX * 10^-6)
+(define-data-var stackers-list (list 300 principal) (list tx-sender))
+(define-data-var liquidity-provider principal tx-sender)
 (define-data-var active bool true)
 (define-data-var blocks-rewarded uint u0)
 (define-data-var amount-rewarded uint u0)
@@ -141,7 +141,7 @@
   (var-set sc-reserved-balance (+ (var-get sc-reserved-balance) amount))
   (ok true)))
 
-(define-public (unreserve-extra-reserved-funds) 
+(define-public (unlock-extra-reserved-funds) 
 (begin 
   (asserts! 
     (is-eq 
@@ -630,7 +630,7 @@ true))
 
 ;; Read-only helper functions
 
-(define-read-only (print-stx-account)
+(define-read-only (get-stx-account)
 (stx-account tx-sender))
 
 (define-read-only (get-pool-members) 
@@ -729,3 +729,6 @@ true))
 
 (define-read-only (get-return) 
 (var-get return-div))
+
+(define-read-only (get-minimum-deposit-liquidity-provider) 
+(var-get minimum-deposit-amount-liquidity-provider))
