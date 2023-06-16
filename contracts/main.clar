@@ -46,6 +46,7 @@
 (define-constant err-no-reward-for-this-block (err u900))
 (define-constant err-already-rewarded-block (err u992))
 (define-constant err-cant-withdraw-now (err u995))
+(define-constant err-cant-unwrap-exchange-preview (err u996))
 (define-constant err-return-div-exceeds-maximum (err u997))
 (define-constant err-pox-address-deactivated (err u999))
 (define-constant err-weights-not-calculated (err u1000))
@@ -188,7 +189,7 @@
 (begin
   (asserts! (not (check-pool-SC-pox-2-allowance)) err-disallow-pool-in-pox-2-first)
   (asserts! (is-some (map-get? user-data {address: tx-sender})) err-not-in-pool)
-  (asserts! (is-eq tx-sender (var-get liquidity-provider)) err-liquidity-provider-not-permitted)
+  (asserts! (not (is-eq tx-sender (var-get liquidity-provider))) err-liquidity-provider-not-permitted)
   (let ((result-revoke
           ;; calls revoke and ignores result
           (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
@@ -473,7 +474,14 @@
 (map transfer-reward-one-stacker stackers-list-before-cycle))
 
 (define-private (transfer-reward-one-stacker (stacker principal)) 
-(let ((reward (* u426 (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)}))))) ;; TODO: replace with alexGo 
+(let (
+      ;; (reward (* u426 (default-to u0 (get reward (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)}))))) ;; TODO: replace with alexGo 
+      (reward 
+        (unwrap! (preview-exchange-reward 
+          (default-to u0 
+            (get reward 
+              (map-get? burn-block-rewards { burn-height: (var-get burn-block-to-distribute-rewards)}))) 
+          u5) err-cant-unwrap-exchange-preview))
       (stacker-weight 
         (default-to u0 
           (get weight-percentage 
@@ -490,6 +498,10 @@
                 (ok true))
             error (err error)) 
           (ok false))))
+
+
+(define-private (preview-exchange-reward (sats-amount uint) (slippeage uint)) 
+(contract-call? .bridge-contract swap-preview .token-wbtc .token-wstx sats-amount slippeage))
 
 ;; Weight calculation functions
 
@@ -725,7 +737,6 @@ true))
       (start-value (- REWARD_CYCLE_LENGTH u10))
       (end-value (- REWARD_CYCLE_LENGTH u1))) 
   (and (>= mod-burn-height start-value) (<= mod-burn-height end-value))))
-
 
 (define-read-only (get-return) 
 (var-get return-div))

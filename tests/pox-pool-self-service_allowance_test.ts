@@ -48,7 +48,7 @@ Clarinet.test({
     let block = chain.mineBlock([
       Tx.contractCall(
         "main",
-        "deposit-stx-SC-owner",
+        "deposit-stx-liquidity-provider",
         [types.uint(10_000_000_000)],
         deployer.address
       ),
