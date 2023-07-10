@@ -9,17 +9,17 @@ cache_dir = '.\.cache'
 contract_id = 'SP000000000000000000002Q6VF78.pox-2'
 
 [[project.requirements]]
-contract_id = 'ST000000000000000000002AMW42H.pox-2'
+contract_id = 'ST000000000000000000002AMW42H.pox-3'
 
 [contracts.main]
 path = 'contracts/main.clar'
 clarity_version = 2
-epoch = 2.1
+epoch = 2.4
 
 [contracts.pox-2-fake]
 path = 'contracts/pox-2-fake.clar'
 clarity_version = 2
-epoch = 2.1
+epoch = 2.4
 [repl.analysis]
 passes = ['check_checker']
 

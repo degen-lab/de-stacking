@@ -14,13 +14,13 @@
 
 ;; Default length of the PoX registration window, in burnchain blocks.
 ;;TODO: pox-2 mainnet address: 'SP000000000000000000002Q6VF78
-(define-constant PREPARE_CYCLE_LENGTH (get prepare-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-pox-info))))
+(define-constant PREPARE_CYCLE_LENGTH (get prepare-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-3 get-pox-info))))
 
 ;; Default length of the PoX reward cycle, in burnchain blocks.
-(define-constant REWARD_CYCLE_LENGTH (get reward-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-pox-info))))
+(define-constant REWARD_CYCLE_LENGTH (get reward-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-3 get-pox-info))))
 
 ;; Half cycle length is 1050 for mainnet
-(define-constant half-cycle-length (/ (get reward-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-pox-info))) u2))
+(define-constant half-cycle-length (/ (get reward-cycle-length (unwrap-panic (contract-call? 'ST000000000000000000002AMW42H.pox-3 get-pox-info))) u2))
 
 (define-constant err-only-liquidity-provider (err u100))
 (define-constant err-already-in-pool (err u101))
@@ -55,7 +55,7 @@
 (define-constant first-deposit u0)
 (define-constant list-max-len u300)
 (define-constant pool-contract (as-contract tx-sender))
-(define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-2))
+(define-constant pox-2-contract (as-contract 'ST000000000000000000002AMW42H.pox-3))
 (define-constant blocks-to-pass-until-reward u101)
 (define-constant max-return-div-accepted u20)
 ;; liquidity provider data vars
@@ -193,7 +193,7 @@
   (asserts! (not (is-eq tx-sender (var-get liquidity-provider))) err-liquidity-provider-not-permitted)
   (let ((result-revoke
           ;; calls revoke and ignores result
-          (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx)))
+          (contract-call? 'ST000000000000000000002AMW42H.pox-3 revoke-delegate-stx)))
 
       (try! (disallow-contract-caller pool-contract))
       (var-set stackers-list (filter remove-stacker-stackers-list (var-get stackers-list))) 
@@ -206,7 +206,7 @@
 (define-public (update-sc-balances)
 (let (
   (next-reward-cycle (get-next-reward-cycle))
-  (next-reward-cycle-first-block (contract-call? 'ST000000000000000000002AMW42H.pox-2 reward-cycle-to-burn-height (get-next-reward-cycle)))) 
+  (next-reward-cycle-first-block (contract-call? 'ST000000000000000000002AMW42H.pox-3 reward-cycle-to-burn-height (get-next-reward-cycle)))) 
 (begin 
   ;; check current block to be inside the first half of the current reward cycle's prepare phase
   (asserts! 
@@ -256,7 +256,7 @@
 ;; The rewards will be distributed. At that moment, the SC balance should have been updated and the stackers' weights calculated
 (define-public (reward-distribution (rewarded-burn-block uint))
 (let ((reward-cycle 
-        (contract-call? 'ST000000000000000000002AMW42H.pox-2 burn-height-to-reward-cycle rewarded-burn-block))
+        (contract-call? 'ST000000000000000000002AMW42H.pox-3 burn-height-to-reward-cycle rewarded-burn-block))
       (stackers-list-for-reward-cycle 
         (default-to (list ) (get stackers-list (map-get? updated-sc-balances {reward-cycle: reward-cycle})))))
           (asserts! (< rewarded-burn-block burn-block-height) err-no-reward-yet)
@@ -275,7 +275,7 @@
 ;; delegating stx to the pool SC
 (define-public (delegate-stx (amount-ustx uint))
 (let ((user tx-sender)
-      (current-cycle (contract-call? 'ST000000000000000000002AMW42H.pox-2 current-pox-reward-cycle)))
+      (current-cycle (contract-call? 'ST000000000000000000002AMW42H.pox-3 current-pox-reward-cycle)))
   (asserts! (check-caller-allowed) err-stacking-permission-denied)
   (asserts! (check-pool-SC-pox-2-allowance) err-allow-pool-in-pox-2-first)
   
@@ -288,7 +288,7 @@
 ;; This function can be called by automation, friends or family for user that have delegated once.
 ;; This function can be called only after the current cycle is half through
 (define-public (delegate-stack-stx (user principal))
-  (let ((current-cycle (contract-call? 'ST000000000000000000002AMW42H.pox-2 current-pox-reward-cycle)))
+  (let ((current-cycle (contract-call? 'ST000000000000000000002AMW42H.pox-3 current-pox-reward-cycle)))
     (asserts! (can-lock-now current-cycle) err-too-early)
     ;; Do 3.
     (try! (as-contract (lock-delegated-stx user)))
@@ -334,12 +334,12 @@
           ;; Total stacked already reached minimum.
           ;; Call stack-aggregate-increase.
           ;; It might fail because called in the same cycle twice.
-    index (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-2 stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
+    index (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-3 stack-aggregation-increase (var-get pool-pox-address) reward-cycle index))
             success (map-set last-aggregation reward-cycle block-height)
             error (begin (print {err-increase-ignored: error}) false))
           ;; Total stacked is still below minimum.
           ;; Just try to commit, it might fail because minimum not yet met
-    (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-2 stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
+    (match (as-contract (contract-call? 'ST000000000000000000002AMW42H.pox-3 stack-aggregation-commit-indexed (var-get pool-pox-address) reward-cycle))
       index (begin
               (map-set pox-addr-indices reward-cycle index)
               (map-set last-aggregation reward-cycle block-height))
@@ -349,7 +349,7 @@
 (define-private (delegate-stx-inner (amount-ustx uint) (delegate-to principal) (until-burn-ht (optional uint)))
 (let ((result-revoke
         ;; Calls revoke and ignores result
-        (contract-call? 'ST000000000000000000002AMW42H.pox-2 revoke-delegate-stx))
+        (contract-call? 'ST000000000000000000002AMW42H.pox-3 revoke-delegate-stx))
       (user-delegated-balance 
         (default-to u0 (get delegated-balance (map-get? user-data {address: tx-sender})))))
       (if 
@@ -365,7 +365,7 @@
             (decrement-sc-delegated-balance u0)) 
           (decrement-sc-delegated-balance u0))
   ;; Calls delegate-stx, converts any error to uint
-  (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stx amount-ustx delegate-to until-burn-ht none)
+  (match (contract-call? 'ST000000000000000000002AMW42H.pox-3 delegate-stx amount-ustx delegate-to until-burn-ht none)
     success (begin 
               (increment-sc-delegated-balance amount-ustx)
               (map-set 
@@ -389,7 +389,7 @@
       (allowed-amount (min (get-delegated-amount user) (+ (get locked user-account) (get unlocked user-account))))
       (amount-ustx (if (> allowed-amount buffer-amount) (- allowed-amount buffer-amount) allowed-amount)))
   (asserts! (var-get active) err-pox-address-deactivated)
-  (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-stx
+  (match (contract-call? 'ST000000000000000000002AMW42H.pox-3 delegate-stack-stx
             user amount-ustx
             pox-address start-burn-ht u1)
     stacker-details 
@@ -418,7 +418,7 @@
                   (start-burn-ht uint))
 (let ((status (stx-account user)))
   (asserts! (>= amount-ustx (get locked status)) err-decrease-forbidden)
-  (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-extend
+  (match (contract-call? 'ST000000000000000000002AMW42H.pox-3 delegate-stack-extend
           user pox-address u1)
     success (begin 
             (print "success")
@@ -436,7 +436,7 @@
                       (some (+ (default-to u0 (default-to (some u0) (get until-burn-ht (map-get? user-data {address: user})))) REWARD_CYCLE_LENGTH))
                     })
             (if (> amount-ustx (get locked status))          
-              (match (contract-call? 'ST000000000000000000002AMW42H.pox-2 delegate-stack-increase 
+              (match (contract-call? 'ST000000000000000000002AMW42H.pox-3 delegate-stack-increase 
                 user 
                 pox-address 
                 (- 
@@ -522,7 +522,7 @@
 (define-private (calculate-one-stacker-weight (stacker principal))
 (let ((last-burn-block-before-reward-cycle 
         (- 
-          (contract-call? 'ST000000000000000000002AMW42H.pox-2 reward-cycle-to-burn-height (var-get reward-cycle-to-calculate-weight)) 
+          (contract-call? 'ST000000000000000000002AMW42H.pox-3 reward-cycle-to-burn-height (var-get reward-cycle-to-calculate-weight)) 
           u1))
       ;; total locked by pool
       (total-locked-at-reward-cycle 
@@ -639,7 +639,7 @@ true))
     amount-2))
 
 (define-private (get-next-reward-cycle) 
-(+ (contract-call? 'ST000000000000000000002AMW42H.pox-2 burn-height-to-reward-cycle burn-block-height) u1))
+(+ (contract-call? 'ST000000000000000000002AMW42H.pox-3 burn-height-to-reward-cycle burn-block-height) u1))
 
 ;; Read-only helper functions
 
@@ -685,7 +685,7 @@ true))
 (map-get? user-data {address: user}))
 
 (define-read-only (check-pool-SC-pox-2-allowance)
-(is-some (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-allowance-contract-callers tx-sender pool-contract)))
+(is-some (contract-call? 'ST000000000000000000002AMW42H.pox-3 get-allowance-contract-callers tx-sender pool-contract)))
 
 (define-read-only (get-pox-addr-indices (reward-cycle uint))
 (map-get? pox-addr-indices reward-cycle))
@@ -694,10 +694,10 @@ true))
 (ok (get-burn-block-info? pox-addrs burn-height)))
 
 (define-read-only (can-lock-now (cycle uint))
-(> burn-block-height (+ (contract-call? 'ST000000000000000000002AMW42H.pox-2 reward-cycle-to-burn-height cycle) half-cycle-length)))
+(> burn-block-height (+ (contract-call? 'ST000000000000000000002AMW42H.pox-3 reward-cycle-to-burn-height cycle) half-cycle-length)))
 
 (define-read-only (get-delegated-amount (user principal))
-(default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-2 get-delegation-info user))))
+(default-to u0 (get amount-ustx (contract-call? 'ST000000000000000000002AMW42H.pox-3 get-delegation-info user))))
 
 (define-read-only (get-liquidity-provider) 
 (var-get liquidity-provider))
